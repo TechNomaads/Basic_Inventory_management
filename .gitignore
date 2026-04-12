@@ -1,0 +1,25 @@
+# Python / Backend
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.sqlite3
+backend/.env
+backend/.venv/
+backend/venv/
+
+# Flutter / Frontend
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
