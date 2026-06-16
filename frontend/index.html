@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InventoryManager — Dashboard</title>
+    <!-- Outfit & Inter Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons via CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Socket.IO Client -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- ── Ambient Glowing Background ── -->
+    <div class="ambient-glow"></div>
+
+    <!-- ── LOGIN SCREEN ── -->
+    <div id="login-screen" class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="app-logo">
+                    <i data-lucide="package" class="logo-icon"></i>
+                </div>
+                <h1>InventoryManager</h1>
+                <p>Sign in to access the control panel</p>
+            </div>
+            
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="login-email">Email Address</label>
+                    <div class="input-wrapper">
+                        <i data-lucide="mail" class="input-icon"></i>
+                        <input type="email" id="login-email" required placeholder="admin@inventory.app">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <div class="input-wrapper">
+                        <i data-lucide="lock" class="input-icon"></i>
+                        <input type="password" id="login-password" required placeholder="••••••••">
+                    </div>
+                </div>
+
+                <div id="login-error" class="error-msg hidden">
+                    <i data-lucide="alert-circle"></i>
+                    <span id="login-error-text">Invalid credentials</span>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-block">
+                    <span>Sign In</span>
+                    <i data-lucide="arrow-right"></i>
+                </button>
+            </form>
+            
+            <div class="login-footer">
+                <p>Default credentials:</p>
+                <div class="cred-hints">
+                    <span>Admin: admin@inventory.app / admin123</span>
+                    <span>Staff: staff@inventory.app / staff123</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── MAIN APPLICATION LAYOUT ── -->
+    <div id="app-layout" class="app-layout hidden">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <i data-lucide="package" class="brand-icon"></i>
+                <span>InventoryManager</span>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-tab="dashboard">
+                    <i data-lucide="layout-dashboard"></i>
+                    <span>Dashboard</span>
+                </button>
+                <button class="nav-item" data-tab="products">
+                    <i data-lucide="boxes"></i>
+                    <span>Products</span>
+                </button>
+                <button class="nav-item" data-tab="inventory">
+                    <i data-lucide="warehouse"></i>
+                    <span>Inventory</span>
+                </button>
+                <button class="nav-item" data-tab="pending" id="nav-pending">
+                    <i data-lucide="clock"></i>
+                    <span>Pending Approvals</span>
+                    <span class="badge badge-accent hidden" id="pending-count">0</span>
+                </button>
+                <button class="nav-item" data-tab="audit" id="nav-audit">
+                    <i data-lucide="clipboard-list"></i>
+                    <span>Audit Logs</span>
+                </button>
+            </nav>
+            
+            <div class="sidebar-user">
+                <div class="user-avatar" id="user-avatar-initials">AD</div>
+                <div class="user-info">
+                    <span class="user-name" id="user-display-name">Admin User</span>
+                    <span class="user-role" id="user-display-role">Administrator</span>
+                </div>
+                <button id="logout-btn" class="logout-btn" title="Logout">
+                    <i data-lucide="log-out"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="content-container">
+            <!-- Header -->
+            <header class="content-header">
+                <div class="header-left">
+                    <h2 id="current-tab-title">Dashboard</h2>
+                </div>
+                <div class="header-right">
+                    <!-- Real-Time Sync Status -->
+                    <div id="sync-status" class="sync-status disconnected">
+                        <span class="status-dot"></span>
+                        <span class="status-text">Disconnected</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- ── TAB CONTENT: DASHBOARD ── -->
+            <section id="tab-dashboard" class="tab-panel">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Total Unique Products</span>
+                            <i data-lucide="boxes" class="stat-icon text-primary"></i>
+                        </div>
+                        <div class="stat-value" id="stat-total-products">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Low Stock Alerts</span>
+                            <i data-lucide="alert-triangle" class="stat-icon text-warning"></i>
+                        </div>
+                        <div class="stat-value" id="stat-low-stock">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Out of Stock Items</span>
+                            <i data-lucide="x-circle" class="stat-icon text-danger"></i>
+                        </div>
+                        <div class="stat-value" id="stat-out-of-stock">0</div>
+                    </div>
+                </div>
+
+                <div class="dashboard-details">
+                    <div class="card card-table">
+                        <div class="card-header">
+                            <h3>Recent Activity</h3>
+                            <button class="btn btn-sm btn-ghost" id="refresh-dashboard-btn">
+                                <i data-lucide="refresh-cw"></i> Refresh
+                            </button>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="table" id="dashboard-tx-table">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Product</th>
+                                        <th>Location</th>
+                                        <th>User</th>
+                                        <th>Operation</th>
+                                        <th>Qty Delta</th>
+                                        <th>Reference</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="7" class="text-center text-muted">Loading transactions...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ── TAB CONTENT: PRODUCTS ── -->
+            <section id="tab-products" class="tab-panel hidden">
+                <div class="table-actions">
+                    <div class="search-filters">
+                        <div class="input-wrapper search-box">
+                            <i data-lucide="search" class="input-icon"></i>
+                            <input type="text" id="product-search" placeholder="Search by name, SKU, or barcode...">
+                        </div>
+                        <select id="product-category-filter">
+                            <option value="">All Categories</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" id="btn-add-product" class="admin-manager-only">
+                        <i data-lucide="plus"></i>
+                        <span>Add Product</span>
+                    </button>
+                </div>
+
+                <div class="card card-table">
+                    <div class="table-wrapper">
+                        <table class="table" id="products-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>SKU</th>
+                                    <th>Barcode</th>
+                                    <th>Category</th>
+                                    <th>Supplier</th>
+                                    <th>Unit</th>
+                                    <th>Cost Price</th>
+                                    <th>Sell Price</th>
+                                    <th class="text-right admin-manager-only">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="9" class="text-center text-muted">Loading products...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="pagination">
+                        <button class="btn btn-icon" id="product-prev-page" disabled><i data-lucide="chevron-left"></i></button>
+                        <span id="product-page-info" class="page-info">Page 1 of 1</span>
+                        <button class="btn btn-icon" id="product-next-page" disabled><i data-lucide="chevron-right"></i></button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ── TAB CONTENT: INVENTORY ── -->
+            <section id="tab-inventory" class="tab-panel hidden">
+                <div class="table-actions">
+                    <div class="search-filters">
+                        <div class="location-select-wrapper">
+                            <label for="inventory-location-select" class="field-label">Active Location:</label>
+                            <select id="inventory-location-select" class="select-large">
+                                <!-- Locations will load here -->
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-ghost" id="refresh-inventory-btn">
+                        <i data-lucide="refresh-cw"></i> Reload Stock
+                    </button>
+                </div>
+
+                <div class="card card-table">
+                    <div class="table-wrapper">
+                        <table class="table" id="inventory-table">
+                            <thead>
+                                <tr>
+                                    <th>Product Name</th>
+                                    <th>SKU</th>
+                                    <th>Barcode</th>
+                                    <th>Current Quantity</th>
+                                    <th>Min Req</th>
+                                    <th>Max Limit</th>
+                                    <th>Status</th>
+                                    <th>Last Updated</th>
+                                    <th class="text-right">Stock Control</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="9" class="text-center text-muted">Please select a location.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ── TAB CONTENT: PENDING APPROVALS ── -->
+            <section id="tab-pending" class="tab-panel hidden">
+                <div class="card card-table">
+                    <div class="table-wrapper">
+                        <table class="table" id="pending-table">
+                            <thead>
+                                <tr>
+                                    <th>Date Created</th>
+                                    <th>Product</th>
+                                    <th>Location</th>
+                                    <th>Requested By</th>
+                                    <th>Adjustment Qty</th>
+                                    <th>Notes</th>
+                                    <th class="text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="7" class="text-center text-muted">No pending adjustments.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ── TAB CONTENT: AUDIT LOGS ── -->
+            <section id="tab-audit" class="tab-panel hidden">
+                <div class="card card-table">
+                    <div class="table-wrapper">
+                        <table class="table" id="audit-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Action</th>
+                                    <th>Entity</th>
+                                    <th>Entity ID</th>
+                                    <th>User</th>
+                                    <th>IP Address</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="7" class="text-center text-muted">Loading audit logs...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ── 🛠️ PRODUCT MODAL (ADD / EDIT) ── -->
+    <div id="product-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="product-modal-title">Add New Product</h3>
+                <button class="modal-close" data-close-modal="product-modal"><i data-lucide="x"></i></button>
+            </div>
+            <form id="product-form">
+                <input type="hidden" id="product-id-field">
+                
+                <div class="form-grid">
+                    <div class="form-group col-span-2">
+                        <label for="prod-name">Product Name *</label>
+                        <input type="text" id="prod-name" required placeholder="e.g. Raspberry Pi 4 Model B">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="prod-sku">SKU Code *</label>
+                        <input type="text" id="prod-sku" required placeholder="RPI-4B-4GB">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="prod-barcode">Barcode (EAN-13) *</label>
+                        <input type="text" id="prod-barcode" required placeholder="5901234567891">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="prod-category">Category *</label>
+                        <select id="prod-category" required>
+                            <!-- Dynamically populated -->
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="prod-supplier">Supplier *</label>
+                        <select id="prod-supplier" required>
+                            <!-- Dynamically populated -->
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="prod-unit">Unit of Measure *</label>
+                        <input type="text" id="prod-unit" required placeholder="pcs, rolls, boxes">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="prod-cost">Cost Price ($) *</label>
+                        <input type="number" id="prod-cost" step="0.01" min="0" required placeholder="45.00">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="prod-sell">Sell Price ($) *</label>
+                        <input type="number" id="prod-sell" step="0.01" min="0" required placeholder="74.99">
+                    </div>
+
+                    <div class="form-group col-span-2">
+                        <label for="prod-image">Image URL</label>
+                        <input type="url" id="prod-image" placeholder="https://example.com/image.png">
+                    </div>
+                </div>
+
+                <div id="product-error" class="error-msg hidden">
+                    <i data-lucide="alert-circle"></i>
+                    <span id="product-error-text">An error occurred</span>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" data-close-modal="product-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Product</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── 🛠️ TRANSACTION MODAL (STOCK IN / OUT) ── -->
+    <div id="tx-modal" class="modal-overlay hidden">
+        <div class="modal-card modal-sm">
+            <div class="modal-header">
+                <h3>Record Stock Transaction</h3>
+                <button class="modal-close" data-close-modal="tx-modal"><i data-lucide="x"></i></button>
+            </div>
+            <form id="tx-form">
+                <input type="hidden" id="tx-product-id">
+                <input type="hidden" id="tx-location-id">
+                <input type="hidden" id="tx-known-version">
+
+                <div class="modal-summary-panel">
+                    <div class="summary-row">
+                        <span class="label">Product:</span>
+                        <span class="value" id="tx-prod-name-display">Loading...</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="label">Current Stock:</span>
+                        <span class="value" id="tx-prod-qty-display">0</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="tx-type">Transaction Type *</label>
+                    <select id="tx-type" required>
+                        <option value="receive">Receive (Stock In)</option>
+                        <option value="dispatch">Dispatch (Stock Out)</option>
+                        <option value="transfer_in">Transfer In</option>
+                        <option value="transfer_out">Transfer Out</option>
+                        <option value="damage">Damage (Loss)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="tx-qty">Quantity Change *</label>
+                    <input type="number" id="tx-qty" required min="1" placeholder="e.g. 15">
+                    <span class="field-hint">Always enter a positive number. If Dispatch or Damage is selected, it will be processed as a negative change automatically.</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="tx-ref">Reference Number</label>
+                    <input type="text" id="tx-ref" placeholder="PO-12345, SO-67890">
+                </div>
+
+                <div class="form-group">
+                    <label for="tx-notes">Notes / Reason</label>
+                    <textarea id="tx-notes" rows="2" placeholder="e.g. Weekly restocking delivery"></textarea>
+                </div>
+
+                <div id="tx-error" class="error-msg hidden">
+                    <i data-lucide="alert-circle"></i>
+                    <span id="tx-error-text">An error occurred</span>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" data-close-modal="tx-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit Transaction</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── 🛠️ ADJUSTMENT MODAL ── -->
+    <div id="adjustment-modal" class="modal-overlay hidden">
+        <div class="modal-card modal-sm">
+            <div class="modal-header">
+                <h3>Request Stock Adjustment</h3>
+                <button class="modal-close" data-close-modal="adjustment-modal"><i data-lucide="x"></i></button>
+            </div>
+            <form id="adjustment-form">
+                <input type="hidden" id="adj-product-id">
+                <input type="hidden" id="adj-location-id">
+                <input type="hidden" id="adj-known-version">
+
+                <div class="modal-summary-panel">
+                    <div class="summary-row">
+                        <span class="label">Product:</span>
+                        <span class="value" id="adj-prod-name-display">Loading...</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="label">Current Stock:</span>
+                        <span class="value" id="adj-prod-qty-display">0</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="adj-qty">Quantity Change *</label>
+                    <input type="number" id="adj-qty" required placeholder="e.g. -5 or 8">
+                    <span class="field-hint">Use a positive value to increase, or negative value to decrease.</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="adj-notes">Adjustment Notes *</label>
+                    <textarea id="adj-notes" required rows="3" placeholder="e.g. Found 2 misplaced units during audit"></textarea>
+                </div>
+
+                <div id="adj-info" class="info-alert">
+                    <i data-lucide="info"></i>
+                    <span>Adjustments larger than <strong>10 units</strong> will be routed to a pending queue for manager approval before applying.</span>
+                </div>
+
+                <div id="adj-error" class="error-msg hidden">
+                    <i data-lucide="alert-circle"></i>
+                    <span id="adj-error-text">An error occurred</span>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" data-close-modal="adjustment-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Apply Adjustment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

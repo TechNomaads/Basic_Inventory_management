@@ -57,6 +57,18 @@ services:
     volumes:
       - ./backend/app:/app/app  # hot-reload in dev
 
+  # ── Nginx Web Frontend ──────────────────────────────────────────
+  frontend:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   pgdata:
     driver: local

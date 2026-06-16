@@ -16,10 +16,14 @@ Dependencies:
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db
 from app.models.user import UserModel
+from app.models.location import LocationModel
+from app.models.category import CategoryModel
+from app.models.supplier import SupplierModel
 from app.repositories.inventory_repo import inventory_repo
 from app.schemas.inventory import (
     AdjustmentRequest,
@@ -138,3 +142,36 @@ async def create_adjustment(
         db, body, current_user.id,
         request.client.host if request.client else None,
     )
+
+
+@router.get("/meta/locations", response_model=list[dict])
+async def list_locations(
+    db: AsyncSession = Depends(get_db),
+    _user: UserModel = Depends(get_current_user),
+) -> list[dict]:
+    """List all locations in the database."""
+    result = await db.execute(select(LocationModel))
+    locations = result.scalars().all()
+    return [{"id": str(loc.id), "name": loc.name, "code": loc.code, "type": loc.type} for loc in locations]
+
+
+@router.get("/meta/categories", response_model=list[dict])
+async def list_categories(
+    db: AsyncSession = Depends(get_db),
+    _user: UserModel = Depends(get_current_user),
+) -> list[dict]:
+    """List all categories in the database."""
+    result = await db.execute(select(CategoryModel))
+    categories = result.scalars().all()
+    return [{"id": str(cat.id), "name": cat.name, "description": cat.description} for cat in categories]
+
+
+@router.get("/meta/suppliers", response_model=list[dict])
+async def list_suppliers(
+    db: AsyncSession = Depends(get_db),
+    _user: UserModel = Depends(get_current_user),
+) -> list[dict]:
+    """List all suppliers in the database."""
+    result = await db.execute(select(SupplierModel))
+    suppliers = result.scalars().all()
+    return [{"id": str(sup.id), "name": sup.name, "contact_name": sup.contact_name} for sup in suppliers]
