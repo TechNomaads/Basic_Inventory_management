@@ -28,6 +28,8 @@ from app.models.supplier import SupplierModel
 from app.models.location import LocationModel
 from app.models.product import ProductModel
 from app.models.inventory import InventoryModel
+from app.models.customer import CustomerModel
+from app.models.invoice import InvoiceModel, InvoiceItemModel, PaymentMode
 
 
 async def seed() -> None:
@@ -147,6 +149,7 @@ async def seed() -> None:
                 "unit": "pcs",
                 "cost_price": 18.50,
                 "sell_price": 27.99,
+                "tax_rate": 18.00,
             },
             {
                 "barcode": "5901234567891",
@@ -157,6 +160,7 @@ async def seed() -> None:
                 "unit": "pcs",
                 "cost_price": 45.00,
                 "sell_price": 74.99,
+                "tax_rate": 18.00,
             },
             {
                 "barcode": "6901234567892",
@@ -167,6 +171,7 @@ async def seed() -> None:
                 "unit": "rolls",
                 "cost_price": 12.00,
                 "sell_price": 19.99,
+                "tax_rate": 12.00,
             },
             {
                 "barcode": "7901234567893",
@@ -177,6 +182,7 @@ async def seed() -> None:
                 "unit": "pcs",
                 "cost_price": 0.85,
                 "sell_price": 1.50,
+                "tax_rate": 5.00,
             },
             {
                 "barcode": "8901234567894",
@@ -187,6 +193,7 @@ async def seed() -> None:
                 "unit": "rolls",
                 "cost_price": 8.50,
                 "sell_price": 14.99,
+                "tax_rate": 12.00,
             },
         ]
 
@@ -202,6 +209,7 @@ async def seed() -> None:
                 unit=pd["unit"],
                 cost_price=pd["cost_price"],
                 sell_price=pd["sell_price"],
+                tax_rate=pd["tax_rate"],
             )
             db.add(product)
             product_models.append(product)
@@ -244,6 +252,65 @@ async def seed() -> None:
                 version=0,
                 updated_at=datetime.now(timezone.utc),
             ))
+
+        # ── Create Customers ─────────────────────────────────────
+        cust_walkin = CustomerModel(
+            id=uuid.uuid4(),
+            name="Anonymous/Walk-in",
+            phone=None,
+            created_at=datetime.now(timezone.utc),
+        )
+        cust_john = CustomerModel(
+            id=uuid.uuid4(),
+            name="John Doe",
+            phone="9876543210",
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add_all([cust_walkin, cust_john])
+        await db.flush()
+
+        # ── Create Demo Invoices ─────────────────────────────────
+        demo_invoice = InvoiceModel(
+            id=uuid.uuid4(),
+            invoice_number="INV-2026-00001",
+            location_id=loc_store.id,
+            user_id=admin.id,
+            customer_id=cust_john.id,
+            subtotal=63.48,      # (2 * 27.99) + (5 * 1.50) = 55.98 + 7.50
+            tax_amount=10.46,    # (55.98 * 0.18) + (7.50 * 0.05) = 10.08 + 0.38 (approx)
+            discount_amount=5.00,
+            total_amount=68.94,  # subtotal + tax - discount
+            payment_mode=PaymentMode.upi,
+            notes="Demo invoice for John Doe",
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(demo_invoice)
+        await db.flush()
+
+        # Add invoice items
+        item_arduino = InvoiceItemModel(
+            id=uuid.uuid4(),
+            invoice_id=demo_invoice.id,
+            product_id=product_models[0].id,  # Arduino
+            quantity=2,
+            unit_price=27.99,
+            cost_price=18.50,
+            tax_rate=18.00,
+            tax_amount=10.08,
+            line_total=66.06,
+        )
+        item_box = InvoiceItemModel(
+            id=uuid.uuid4(),
+            invoice_id=demo_invoice.id,
+            product_id=product_models[3].id,  # Cardboard Box
+            quantity=5,
+            unit_price=1.50,
+            cost_price=0.85,
+            tax_rate=5.00,
+            tax_amount=0.38,
+            line_total=7.88,
+        )
+        db.add_all([item_arduino, item_box])
 
         await db.commit()
         print("  ✅ Seed data created successfully!")

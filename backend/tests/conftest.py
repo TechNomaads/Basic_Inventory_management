@@ -20,13 +20,31 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.database import Base, get_async_session
+from app.core.database import Base
+from app.core.dependencies import get_db
 from app.core.security import create_access_token, hash_password
 from app.main import app
 from app.models.user import UserModel, UserRole
 
-# ── Test database engine (SQLite async) ──────────────────────────
-TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
+from sqlalchemy import text
+from app.core.config import settings
+
+# ── Dynamic Test database engine (PostgreSQL async) ────────────────
+db_url_parts = settings.DATABASE_URL.rsplit("/", 1)
+ADMIN_DATABASE_URL = f"{db_url_parts[0]}/postgres"
+TEST_DATABASE_URL = f"{db_url_parts[0]}/inventory_test_db"
+
+async def create_test_db_if_not_exists():
+    """Ensure the test database exists on the PostgreSQL host."""
+    engine = create_async_engine(ADMIN_DATABASE_URL, isolation_level="AUTOCOMMIT")
+    async with engine.connect() as conn:
+        result = await conn.execute(
+            text("SELECT 1 FROM pg_database WHERE datname='inventory_test_db'")
+        )
+        exists = result.scalar()
+        if not exists:
+            await conn.execute(text("CREATE DATABASE inventory_test_db"))
+    await engine.dispose()
 
 test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 test_session_factory = async_sessionmaker(
@@ -47,6 +65,7 @@ def event_loop():
 @pytest_asyncio.fixture(autouse=True)
 async def setup_database():
     """Create all tables before each test and drop them after."""
+    await create_test_db_if_not_exists()
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
@@ -70,7 +89,7 @@ async def db_session() -> AsyncSession:
 @pytest_asyncio.fixture
 async def client() -> AsyncClient:
     """Provide an async HTTP client bound to the test app."""
-    app.dependency_overrides[get_async_session] = _get_test_session
+    app.dependency_overrides[get_db] = _get_test_session
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac

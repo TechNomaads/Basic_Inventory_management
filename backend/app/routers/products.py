@@ -50,6 +50,7 @@ def _product_to_response(product) -> ProductResponse:
         unit=product.unit,
         cost_price=float(product.cost_price) if product.cost_price else None,
         sell_price=float(product.sell_price) if product.sell_price else None,
+        tax_rate=float(product.tax_rate) if product.tax_rate is not None else 18.0,
         image_url=product.image_url,
         is_active=product.is_active,
         created_at=product.created_at,

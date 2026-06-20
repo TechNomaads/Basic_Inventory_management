@@ -57,6 +57,7 @@ class ProductResponse(BaseModel):
     unit: str
     cost_price: float | None = None
     sell_price: float | None = None
+    tax_rate: float = 18.0
     image_url: str | None = None
     is_active: bool
     created_at: datetime

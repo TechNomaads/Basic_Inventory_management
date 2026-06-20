@@ -26,6 +26,9 @@ class SummaryResponse(BaseModel):
     total_received: int = Field(description="Total receive transactions in period")
     out_of_stock_count: int = Field(description="Products with zero stock")
     active_users: int = Field(description="Users who logged in during period")
+    total_sales_today: int = Field(default=0, description="Total sales processed today")
+    revenue_today: float = Field(default=0.0, description="Total revenue generated today")
+
 
 
 class TransactionHistoryItem(BaseModel):

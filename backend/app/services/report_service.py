@@ -63,6 +63,10 @@ async def get_summary(
     pending_result = await db.execute(pending_stmt)
     pending_count = pending_result.scalar_one()
 
+    # Get billing stats
+    from app.services.billing_service import get_daily_sales_summary
+    billing_summary = await get_daily_sales_summary(db)
+
     return SummaryResponse(
         total_products=total_products,
         low_stock_count=low_stock_count,
@@ -72,4 +76,7 @@ async def get_summary(
         total_received=total_received,
         out_of_stock_count=out_of_stock_count,
         active_users=active_users,
+        total_sales_today=billing_summary["total_sales_today"],
+        revenue_today=billing_summary["revenue_today"],
     )
+

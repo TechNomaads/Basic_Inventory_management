@@ -16,6 +16,10 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../auth/domain/auth_notifier.dart';
+import '../../billing/domain/billing_notifier.dart';
+import '../../reports/domain/reports_notifier.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -108,45 +112,266 @@ class DashboardScreen extends ConsumerWidget {
         color: AppColors.primary,
         backgroundColor: AppColors.cardBg,
         onRefresh: () async {
-          // Refresh dashboard data
+          ref.invalidate(dailySummaryProvider);
+          ref.invalidate(reportsSummaryProvider);
+          ref.invalidate(salesTrendProvider);
+          ref.invalidate(categoryStockProvider);
+          ref.invalidate(recentTransactionsProvider);
+          ref.invalidate(locationInventoryListProvider);
+          try {
+            await ref.read(reportsSummaryProvider.future);
+          } catch (_) {}
         },
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
             // ── Metric cards ────────────────────────────────────
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 1.5,
-              children: [
-                _MetricCard(
-                  title: AppStrings.totalProducts,
-                  value: '—',
-                  icon: Icons.inventory_2_rounded,
-                  color: AppColors.primary,
+            ref.watch(reportsSummaryProvider).when(
+              data: (summary) {
+                final totalProducts = summary['total_products'] ?? 0;
+                final lowStock = summary['low_stock_count'] ?? 0;
+                final todaysScans = summary['todays_scans'] ?? 0;
+                final pending = summary['pending_adjustments'] ?? 0;
+                return GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 1.5,
+                  children: [
+                    _MetricCard(
+                      title: AppStrings.totalProducts,
+                      value: '$totalProducts',
+                      icon: Icons.inventory_2_rounded,
+                      color: AppColors.primary,
+                    ),
+                    _MetricCard(
+                      title: AppStrings.lowStock,
+                      value: '$lowStock',
+                      icon: Icons.warning_amber_rounded,
+                      color: AppColors.stockAmber,
+                    ),
+                    _MetricCard(
+                      title: AppStrings.todaysScans,
+                      value: '$todaysScans',
+                      icon: Icons.qr_code_scanner,
+                      color: AppColors.accent,
+                    ),
+                    _MetricCard(
+                      title: AppStrings.pendingApprovals,
+                      value: '$pending',
+                      icon: Icons.pending_actions,
+                      color: AppColors.warning,
+                    ),
+                  ],
+                );
+              },
+              loading: () => GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 1.5,
+                children: const [
+                  _MetricCard(title: AppStrings.totalProducts, value: '...', icon: Icons.inventory_2_rounded, color: AppColors.primary),
+                  _MetricCard(title: AppStrings.lowStock, value: '...', icon: Icons.warning_amber_rounded, color: AppColors.stockAmber),
+                  _MetricCard(title: AppStrings.todaysScans, value: '...', icon: Icons.qr_code_scanner, color: AppColors.accent),
+                  _MetricCard(title: AppStrings.pendingApprovals, value: '...', icon: Icons.pending_actions, color: AppColors.warning),
+                ],
+              ),
+              error: (err, _) => GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 1.5,
+                children: const [
+                  _MetricCard(title: AppStrings.totalProducts, value: 'Err', icon: Icons.inventory_2_rounded, color: AppColors.primary),
+                  _MetricCard(title: AppStrings.lowStock, value: 'Err', icon: Icons.warning_amber_rounded, color: AppColors.stockAmber),
+                  _MetricCard(title: AppStrings.todaysScans, value: 'Err', icon: Icons.qr_code_scanner, color: AppColors.accent),
+                  _MetricCard(title: AppStrings.pendingApprovals, value: 'Err', icon: Icons.pending_actions, color: AppColors.warning),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // ── POS Daily Sales Summary ──────────────────────────
+            Text(
+              'POS Sales Summary',
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ref.watch(dailySummaryProvider).when(
+              data: (summary) {
+                final sales = summary['total_sales_today'] ?? 0;
+                final revenue = (summary['revenue_today'] ?? 0.0).toDouble();
+                final profit = (summary['profit_today'] ?? 0.0).toDouble();
+                return Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.primary.withOpacity(0.1)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _SalesStat(
+                          label: 'Sales',
+                          value: '$sales',
+                          icon: Icons.receipt_long_outlined,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      Container(width: 1, height: 40, color: AppColors.divider),
+                      Expanded(
+                        child: _SalesStat(
+                          label: 'Revenue',
+                          value: '₹${revenue.toStringAsFixed(0)}',
+                          icon: Icons.monetization_on_outlined,
+                          color: AppColors.success,
+                        ),
+                      ),
+                      Container(width: 1, height: 40, color: AppColors.divider),
+                      Expanded(
+                        child: _SalesStat(
+                          label: 'Profit',
+                          value: '₹${profit.toStringAsFixed(0)}',
+                          icon: Icons.trending_up_rounded,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              loading: () => const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: CircularProgressIndicator(),
                 ),
-                _MetricCard(
-                  title: AppStrings.lowStock,
-                  value: '—',
-                  icon: Icons.warning_amber_rounded,
-                  color: AppColors.stockAmber,
+              ),
+              error: (err, _) => Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                _MetricCard(
-                  title: AppStrings.todaysScans,
-                  value: '—',
-                  icon: Icons.qr_code_scanner,
-                  color: AppColors.accent,
-                ),
-                _MetricCard(
-                  title: AppStrings.pendingApprovals,
-                  value: '—',
-                  icon: Icons.pending_actions,
-                  color: AppColors.warning,
-                ),
-              ],
+                child: Center(
+                  child: Text(
+                    'Failed to load sales: $err',
+                    style: const TextStyle(color: AppColors.erro            const SizedBox(height: 24),
+            Text(
+              'Weekly Sales Performance',
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              height: 180,
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+              decoration: BoxDecoration(
+                color: AppColors.cardBg,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: ref.watch(salesTrendProvider).when(
+                data: (trend) {
+                  if (trend.isEmpty) {
+                    return const Center(child: Text('No trend data available', style: TextStyle(color: AppColors.textSecondary)));
+                  }
+                  
+                  final maxRev = trend.map((e) => (e['revenue'] as num?)?.toDouble() ?? 0.0).reduce((a, b) => a > b ? a : b);
+                  final maxY = maxRev == 0 ? 100.0 : maxRev * 1.25;
+
+                  return LineChart(
+                    LineChartData(
+                      gridData: const FlGridData(show: false),
+                      titlesData: FlTitlesData(
+                        show: true,
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 22,
+                            interval: 1,
+                            getTitlesWidget: (value, meta) {
+                              final int index = value.toInt();
+                              if (index < 0 || index >= trend.length) return const SizedBox.shrink();
+                              final item = trend[index];
+                              final dateStr = item['date'] as String? ?? '';
+                              if (dateStr.isEmpty) return const SizedBox.shrink();
+                              final parsed = DateTime.parse(dateStr);
+                              final dayFormat = DateFormat('E').format(parsed);
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 6.0),
+                                child: Text(
+                                  dayFormat,
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 10,
+                                    fontFamily: GoogleFonts.inter().fontFamily,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      borderData: FlBorderData(show: false),
+                      minX: 0,
+                      maxX: (trend.length - 1).toDouble(),
+                      minY: 0,
+                      maxY: maxY,
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: List.generate(trend.length, (idx) {
+                            final rev = (trend[idx]['revenue'] as num?)?.toDouble() ?? 0.0;
+                            return FlSpot(idx.toDouble(), rev);
+                          }),
+                          isCurved: true,
+                          color: AppColors.primary,
+                          barWidth: 3.5,
+                          isStrokeCapRound: true,
+                          dotData: const FlDotData(show: false),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            color: AppColors.primary.withOpacity(0.08),
+                          ),
+                        ),
+                        LineChartBarData(
+                          spots: List.generate(trend.length, (idx) {
+                            final prf = (trend[idx]['profit'] as num?)?.toDouble() ?? 0.0;
+                            return FlSpot(idx.toDouble(), prf);
+                          }),
+                          isCurved: true,
+                          color: AppColors.success,
+                          barWidth: 2,
+                          isStrokeCapRound: true,
+                          dotData: const FlDotData(show: false),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            color: AppColors.success.withOpacity(0.04),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, _) => Center(child: Text('Chart error: $err', style: const TextStyle(fontSize: 11, color: AppColors.error))),
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -160,20 +385,67 @@ class DashboardScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.cardBg,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Center(
-                child: Text(
-                  AppStrings.noAlerts,
-                  style: GoogleFonts.inter(
-                    color: AppColors.textHint,
-                    fontSize: 14,
+            ref.watch(locationInventoryListProvider).when(
+              data: (list) {
+                final lowStockItems = list.where((item) {
+                  final qty = item['quantity'] as int? ?? 0;
+                  final minQty = item['min_quantity'] as int? ?? 0;
+                  return minQty > 0 && qty < minQty;
+                }).toList();
+
+                if (lowStockItems.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBg,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: Text(
+                        AppStrings.noAlerts,
+                        style: GoogleFonts.inter(
+                          color: AppColors.textHint,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                return Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBg,
+                    borderRadius: BorderRadius.circular(16),
                   ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: lowStockItems.length > 5 ? 5 : lowStockItems.length,
+                    separatorBuilder: (_, __) => const Divider(color: AppColors.divider, height: 1),
+                    itemBuilder: (context, idx) {
+                      final item = lowStockItems[idx];
+                      final name = item['product_name'] ?? 'Unknown';
+                      final qty = item['quantity'] ?? 0;
+                      final minQty = item['min_quantity'] ?? 0;
+                      return ListTile(
+                        leading: const Icon(Icons.warning_amber_rounded, color: AppColors.stockAmber),
+                        title: Text(name, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                        subtitle: Text('Current Stock: $qty / Min threshold: $minQty', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                        dense: true,
+                      );
+                    },
+                  ),
+                );
+              },
+              loading: () => const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(20.0),
+                  child: CircularProgressIndicator(),
                 ),
+              ),
+              error: (err, _) => Container(
+                padding: const EdgeInsets.all(20),
+                child: Center(child: Text('Error loading alerts: $err', style: const TextStyle(color: AppColors.error))),
               ),
             ),
             const SizedBox(height: 24),
@@ -188,20 +460,87 @@ class DashboardScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.cardBg,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Center(
-                child: Text(
-                  AppStrings.noTransactions,
-                  style: GoogleFonts.inter(
-                    color: AppColors.textHint,
-                    fontSize: 14,
+            ref.watch(recentTransactionsProvider).when(
+              data: (list) {
+                if (list.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBg,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: Text(
+                        AppStrings.noTransactions,
+                        style: GoogleFonts.inter(
+                          color: AppColors.textHint,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                return Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBg,
+                    borderRadius: BorderRadius.circular(16),
                   ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: list.length > 5 ? 5 : list.length,
+                    separatorBuilder: (_, __) => const Divider(color: AppColors.divider, height: 1),
+                    itemBuilder: (context, idx) {
+                      final item = list[idx];
+                      final pName = item['product_name'] ?? 'Unknown';
+                      final uName = item['user_name'] ?? 'Staff';
+                      final typeStr = item['type'] ?? 'transaction';
+                      final qtyChange = item['quantity_change'] ?? 0;
+                      final dateStr = item['created_at'] != null 
+                          ? DateFormat('MMM dd, hh:mm a').format(DateTime.parse(item['created_at']))
+                          : '';
+                      final isPositive = qtyChange > 0;
+
+                      IconData icon = Icons.swap_horiz;
+                      Color iconColor = AppColors.textSecondary;
+                      if (typeStr == 'sale') {
+                        icon = Icons.shopping_bag_outlined;
+                        iconColor = AppColors.accent;
+                      } else if (typeStr == 'receive') {
+                        icon = Icons.add_circle_outline;
+                        iconColor = AppColors.success;
+                      } else if (typeStr == 'dispatch') {
+                        icon = Icons.remove_circle_outline;
+                        iconColor = AppColors.error;
+                      }
+
+                      return ListTile(
+                        leading: Icon(icon, color: iconColor),
+                        title: Text(pName, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                        subtitle: Text('By $uName | $dateStr', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                        trailing: Text(
+                          '${isPositive ? "+" : ""}$qtyChange',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.bold,
+                            color: isPositive ? AppColors.success : AppColors.error,
+                            fontSize: 14,
+                          ),
+                        ),
+                        dense: true,
+                      );
+                    },
+                  ),
+                );
+              },
+              loading: () => const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(20.0),
+                  child: CircularProgressIndicator(),
                 ),
+              ),
+              error: (err, _) => Container(
+                padding: const EdgeInsets.all(20),
+                child: Center(child: Text('Error loading activity: $err', style: const TextStyle(color: AppColors.error))),
               ),
             ),
           ],
@@ -228,12 +567,86 @@ class DashboardScreen extends ConsumerWidget {
               case 0:
                 break; // Already on dashboard
               case 1:
-                context.push('/scanner');
+                showModalBottomSheet(
+                  context: context,
+                  backgroundColor: AppColors.cardBg,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  builder: (context) => SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Select Scan Mode',
+                            style: GoogleFonts.outfit(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          ListTile(
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.accent.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.shopping_cart_checkout_outlined, color: AppColors.accent),
+                            ),
+                            title: Text(
+                              'POS Billing',
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                            ),
+                            subtitle: const Text(
+                              'Continuous scanning to auto-append items to cart',
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                            ),
+                            onTap: () {
+                              Navigator.pop(context);
+                              context.push('/billing');
+                            },
+                          ),
+                          const Divider(color: AppColors.divider),
+                          ListTile(
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.warehouse_outlined, color: AppColors.primary),
+                            ),
+                            title: Text(
+                              'Inventory Stock Management',
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                            ),
+                            subtitle: const Text(
+                              'Adjust stock quantities or add new products to catalog',
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                            ),
+                            onTap: () {
+                              Navigator.pop(context);
+                              context.push('/scanner?mode=inventory');
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
                 break;
               case 2:
-                context.push('/reports');
+                context.push('/billing');
                 break;
               case 3:
+                context.push('/reports');
+                break;
+              case 4:
                 if (isAdmin) context.push('/products-mgmt');
                 break;
             }
@@ -246,6 +659,10 @@ class DashboardScreen extends ConsumerWidget {
             BottomNavigationBarItem(
               icon: Icon(Icons.qr_code_scanner),
               label: 'Scan',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.shopping_cart_checkout_outlined),
+              label: 'Billing',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.bar_chart_rounded),
@@ -327,3 +744,45 @@ class _MetricCard extends StatelessWidget {
     );
   }
 }
+
+class _SalesStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _SalesStat({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: GoogleFonts.outfit(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            color: AppColors.textHint,
+          ),
+        ),
+      ],
+    );
+  }
+}
+

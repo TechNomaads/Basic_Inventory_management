@@ -39,6 +39,7 @@ class TransactionType(str, enum.Enum):
     transfer_in = "transfer_in"
     transfer_out = "transfer_out"
     damage = "damage"
+    sale = "sale"
 
 
 class StockTransactionModel(Base):

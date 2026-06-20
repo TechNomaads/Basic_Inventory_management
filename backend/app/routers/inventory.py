@@ -30,6 +30,7 @@ from app.schemas.inventory import (
     InventoryResponse,
     TransactionRequest,
 )
+from app.schemas.quick_adjust import QuickAdjustRequest
 from app.services import inventory_service
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["Inventory"])
@@ -142,6 +143,93 @@ async def create_adjustment(
         db, body, current_user.id,
         request.client.host if request.client else None,
     )
+
+
+@router.post("/quick-adjust")
+async def quick_adjust(
+    body: QuickAdjustRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    """
+    Rapid stock adjustment from the mobile scanner's Inventory mode.
+
+    Looks up a product by barcode, validates the adjustment won't
+    go negative, applies it with optimistic locking, and records
+    a stock transaction.
+
+    Args:
+        body: QuickAdjustRequest with barcode, location_id, adjustment, reason.
+
+    Returns:
+        Dict with product_id, product_name, barcode, new_quantity, new_version.
+
+    Raises:
+        HTTPException 404: If product or inventory record not found.
+        HTTPException 400: If adjustment would result in negative stock.
+    """
+    from fastapi import HTTPException
+    from app.models.product import ProductModel
+    from app.models.inventory import InventoryModel
+    from app.models.stock_transaction import StockTransactionModel
+
+    # 1. Look up product by barcode
+    product_result = await db.execute(
+        select(ProductModel).where(ProductModel.barcode == body.barcode)
+    )
+    product = product_result.scalar_one_or_none()
+    if product is None:
+        raise HTTPException(status_code=404, detail=f"No product found with barcode: {body.barcode}")
+
+    # 2. Look up inventory at the specified location
+    inv_result = await db.execute(
+        select(InventoryModel).where(
+            InventoryModel.product_id == product.id,
+            InventoryModel.location_id == body.location_id,
+        )
+    )
+    inventory = inv_result.scalar_one_or_none()
+    if inventory is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No inventory record for '{product.name}' at this location.",
+        )
+
+    # 3. Validate: removal must not go negative
+    new_qty = inventory.quantity + body.adjustment
+    if new_qty < 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot adjust by {body.adjustment}. Current stock: {inventory.quantity}.",
+        )
+
+    # 4. Apply with version increment (optimistic locking)
+    inventory.quantity = new_qty
+    inventory.version += 1
+
+    # 5. Record stock transaction
+    tx_type = "receipt" if body.adjustment > 0 else "dispatch"
+    tx = StockTransactionModel(
+        product_id=product.id,
+        location_id=body.location_id,
+        user_id=current_user.id,
+        transaction_type=tx_type,
+        quantity_change=body.adjustment,
+        quantity_after=new_qty,
+        reference=body.reason,
+        ip_address=request.client.host if request.client else None,
+    )
+    db.add(tx)
+    await db.commit()
+
+    return {
+        "product_id": str(product.id),
+        "product_name": product.name,
+        "barcode": product.barcode,
+        "new_quantity": new_qty,
+        "new_version": inventory.version,
+    }
 
 
 @router.get("/meta/locations", response_model=list[dict])

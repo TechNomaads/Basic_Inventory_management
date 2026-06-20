@@ -63,6 +63,12 @@ function bindEvents() {
     // Refresh buttons
     document.getElementById('refresh-dashboard-btn').addEventListener('click', loadDashboardData);
     document.getElementById('refresh-inventory-btn').addEventListener('click', loadInventoryData);
+    document.getElementById('refresh-sales-btn').addEventListener('click', loadSalesData);
+
+    // Sales filters
+    document.getElementById('sales-location-filter').addEventListener('change', loadSalesData);
+    document.getElementById('sales-payment-filter').addEventListener('change', loadSalesData);
+    document.getElementById('btn-print-receipt').addEventListener('click', printActiveReceipt);
 
     // Search and filters for products
     document.getElementById('product-search').addEventListener('input', debounce(filterProducts, 300));
@@ -228,7 +234,8 @@ function switchTab(tabName) {
         'products': 'Product Directory',
         'inventory': 'Stock Inventory Controls',
         'pending': 'Pending Adjustments Approval',
-        'audit': 'System Audit Logs'
+        'audit': 'System Audit Logs',
+        'sales': 'Sales Invoice History'
     };
     document.getElementById('current-tab-title').textContent = titleMap[tabName] || 'Dashboard';
 
@@ -252,6 +259,8 @@ function switchTab(tabName) {
         loadPendingAdjustments();
     } else if (tabName === 'audit') {
         loadAuditLogs();
+    } else if (tabName === 'sales') {
+        loadSalesData();
     }
 }
 
@@ -273,6 +282,12 @@ async function loadMetadata() {
         locSelect.innerHTML = locs.map(l => `<option value="${l.id}">${l.name} (${l.code})</option>`).join('');
         if (locs.length > 0) {
             state.selectedLocationId = locs[0].id;
+        }
+
+        const salesLocFilter = document.getElementById('sales-location-filter');
+        if (salesLocFilter) {
+            salesLocFilter.innerHTML = '<option value="">All Locations</option>' + 
+                locs.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
         }
 
         // Populate category filters & modal selectors
@@ -301,6 +316,8 @@ async function loadDashboardData() {
         document.getElementById('stat-total-products').textContent = summary.total_products;
         document.getElementById('stat-low-stock').textContent = summary.low_stock_count;
         document.getElementById('stat-out-of-stock').textContent = summary.out_of_stock_count;
+        document.getElementById('stat-todays-sales').textContent = summary.total_sales_today || 0;
+        document.getElementById('stat-todays-revenue').textContent = `₹${(summary.revenue_today || 0).toFixed(2)}`;
         
         // Load recent transactions
         const txResponse = await fetchWithAuth(`${API_URL}/api/v1/reports/transactions?page=1&size=7`);
@@ -379,8 +396,8 @@ async function loadProductsData() {
                 <td>${escapeHtml(p.category_name || 'Uncategorized')}</td>
                 <td>${escapeHtml(p.supplier_name || '—')}</td>
                 <td>${escapeHtml(p.unit)}</td>
-                <td>$${p.cost_price.toFixed(2)}</td>
-                <td>$${p.sell_price.toFixed(2)}</td>
+                <td>${p.cost_price.toFixed(2)}</td>
+                <td>${p.sell_price.toFixed(2)}</td>
                 ${canManage ? `
                     <td class="text-right">
                         <button class="action-btn action-btn-primary" onclick="openProductModal('${p.id}')" title="Edit">
@@ -435,6 +452,23 @@ async function loadInventoryData() {
 
         tbody.innerHTML = items.map(item => {
             const dateStr = new Date(item.updated_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+            
+            // Calculate status bar fill percentage
+            let percentage = 0;
+            const minVal = item.min_quantity || 0;
+            const maxVal = item.max_quantity || 0;
+            const qty = item.quantity || 0;
+            
+            if (maxVal > 0) {
+                percentage = Math.min(100, Math.max(0, (qty / maxVal) * 100));
+            } else if (minVal > 0) {
+                percentage = Math.min(100, Math.max(0, (qty / (minVal * 2)) * 100));
+            } else {
+                percentage = qty > 0 ? 100 : 0;
+            }
+            
+            const barColor = item.stock_status === 'green' ? 'green' : item.stock_status === 'amber' ? 'amber' : 'red';
+
             return `
                 <tr id="inv-row-${item.product_id}">
                     <td><strong>${escapeHtml(item.product_name)}</strong></td>
@@ -443,6 +477,11 @@ async function loadInventoryData() {
                     <td class="font-bold text-lg" id="inv-qty-${item.product_id}">${item.quantity}</td>
                     <td>${item.min_quantity}</td>
                     <td>${item.max_quantity || '—'}</td>
+                    <td>
+                        <div class="status-bar-container" title="${Math.round(percentage)}%">
+                            <div class="status-bar-fill ${barColor}" style="width: ${percentage}%"></div>
+                        </div>
+                    </td>
                     <td>
                         <span class="badge badge-${item.stock_status}" id="inv-status-${item.product_id}">
                             ${item.stock_status === 'green' ? 'Healthy' : item.stock_status === 'amber' ? 'Low Stock' : 'Out of Stock'}
@@ -813,8 +852,8 @@ function initSocketConnection() {
     });
 
     // Handle real-time stock update events
-    state.socket.on('stock_update', (data) => {
-        console.log('⚡ Socket event: stock_update', data);
+    state.socket.on('stock_updated', (data) => {
+        console.log('⚡ Socket event: stock_updated', data);
         
         // Update the dashboard figures
         if (state.activeTab === 'dashboard') {
@@ -823,11 +862,58 @@ function initSocketConnection() {
 
         // Dynamically update the cell value in inventory table if visible
         if (state.activeTab === 'inventory') {
-            const qtyCell = document.getElementById(`inv-qty-${data.product_id}`);
+            const qtyCell = document.getElementById(`inv-qty-${data.productId}`);
             if (qtyCell) {
-                qtyCell.textContent = data.new_quantity;
+                qtyCell.textContent = data.newQuantity;
                 qtyCell.classList.add('text-success');
                 setTimeout(() => qtyCell.classList.remove('text-success'), 1500);
+
+                // Update the status badge and status bar too!
+                const row = document.getElementById(`inv-row-${data.productId}`);
+                if (row) {
+                    const cells = row.getElementsByTagName('td');
+                    if (cells.length >= 8) {
+                        const qty = data.newQuantity;
+                        const min = parseInt(cells[4].textContent) || 0;
+                        const maxStr = cells[5].textContent.trim();
+                        const max = maxStr === '—' || maxStr === '' ? 0 : parseInt(maxStr) || 0;
+
+                        // Recalculate percentage
+                        let percentage = 0;
+                        if (max > 0) {
+                            percentage = Math.min(100, Math.max(0, (qty / max) * 100));
+                        } else if (min > 0) {
+                            percentage = Math.min(100, Math.max(0, (qty / (min * 2)) * 100));
+                        } else {
+                            percentage = qty > 0 ? 100 : 0;
+                        }
+
+                        // Determine new status
+                        let statusColor = 'green';
+                        let statusText = 'Healthy';
+                        if (qty <= 0) {
+                            statusColor = 'red';
+                            statusText = 'Out of Stock';
+                        } else if (min > 0 && qty < min) {
+                            statusColor = 'amber';
+                            statusText = 'Low Stock';
+                        }
+
+                        // Update Status Bar
+                        const barFill = row.querySelector('.status-bar-fill');
+                        if (barFill) {
+                            barFill.style.width = `${percentage}%`;
+                            barFill.className = `status-bar-fill ${statusColor === 'amber' ? 'amber' : statusColor === 'green' ? 'green' : 'red'}`;
+                        }
+
+                        // Update Status Badge
+                        const statusBadge = document.getElementById(`inv-status-${data.productId}`);
+                        if (statusBadge) {
+                            statusBadge.className = `badge badge-${statusColor}`;
+                            statusBadge.textContent = statusText;
+                        }
+                    }
+                }
             }
         }
     });
@@ -930,3 +1016,106 @@ function debounce(func, wait) {
         timeout = setTimeout(later, wait);
     };
 }
+
+// ── SALES & RECEIPT CONTROLLERS ──
+async function loadSalesData() {
+    try {
+        const locFilter = document.getElementById('sales-location-filter').value;
+        const payFilter = document.getElementById('sales-payment-filter').value;
+
+        let query = `${API_URL}/api/v1/billing/invoices?skip=0&limit=50`;
+        if (locFilter) query += `&location_id=${locFilter}`;
+        if (payFilter) query += `&payment_mode=${payFilter}`;
+
+        const invoices = await fetchWithAuth(query);
+        const tbody = document.querySelector('#sales-table tbody');
+
+        if (!invoices || invoices.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">No sales invoices found.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = invoices.map(inv => {
+            const dateStr = new Date(inv.created_at).toLocaleString();
+            return `
+                <tr>
+                    <td><strong>${escapeHtml(inv.invoice_number)}</strong></td>
+                    <td>${dateStr}</td>
+                    <td>${escapeHtml(inv.location_name)}</td>
+                    <td>${escapeHtml(inv.user_name)}</td>
+                    <td>${escapeHtml(inv.customer_name || 'Anonymous/Walk-in')} ${inv.customer_phone ? `(${escapeHtml(inv.customer_phone)})` : ''}</td>
+                    <td><span class="payment-mode-tag payment-${inv.payment_mode}">${inv.payment_mode.toUpperCase()}</span></td>
+                    <td>${inv.subtotal.toFixed(2)}</td>
+                    <td>${inv.tax_amount.toFixed(2)}</td>
+                    <td>${inv.discount_amount.toFixed(2)}</td>
+                    <td class="font-semibold text-success">${inv.total_amount.toFixed(2)}</td>
+                    <td class="text-right">
+                        <button class="btn btn-sm btn-ghost" onclick="viewInvoiceDetails('${inv.id}')" title="View Details">
+                            <i data-lucide="eye" style="width:16px;height:16px;"></i> View
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        lucide.createIcons();
+
+    } catch (err) {
+        console.error('Error loading sales data:', err);
+    }
+}
+
+let activeInvoiceId = null;
+
+async function viewInvoiceDetails(id) {
+    activeInvoiceId = id;
+    try {
+        const invoice = await fetchWithAuth(`${API_URL}/api/v1/billing/invoices/${id}`);
+        
+        document.getElementById('inv-detail-number').textContent = invoice.invoice_number;
+        document.getElementById('inv-detail-date').textContent = new Date(invoice.created_at).toLocaleString();
+        document.getElementById('inv-detail-location').textContent = invoice.location_name;
+        document.getElementById('inv-detail-cashier').textContent = invoice.user_name;
+        document.getElementById('inv-detail-customer').textContent = invoice.customer_name 
+            ? `${invoice.customer_name} (${invoice.customer_phone || 'No phone'})` 
+            : 'Anonymous/Walk-in';
+
+        // Render line items
+        const tbody = document.querySelector('#invoice-items-table tbody');
+        tbody.innerHTML = invoice.items.map(item => `
+            <tr>
+                <td><strong>${escapeHtml(item.product_name)}</strong><br><span class="text-hint text-xs">${item.product_barcode}</span></td>
+                <td>${item.quantity}</td>
+                <td>${item.unit_price.toFixed(2)}</td>
+                <td>${item.tax_rate}%</td>
+                <td>${item.tax_amount.toFixed(2)}</td>
+                <td class="font-semibold">${item.line_total.toFixed(2)}</td>
+            </tr>
+        `).join('');
+
+        document.getElementById('inv-detail-subtotal').textContent = `₹${invoice.subtotal.toFixed(2)}`;
+        document.getElementById('inv-detail-tax').textContent = `₹${invoice.tax_amount.toFixed(2)}`;
+        document.getElementById('inv-detail-discount').textContent = `-₹${invoice.discount_amount.toFixed(2)}`;
+        document.getElementById('inv-detail-total').textContent = `₹${invoice.total_amount.toFixed(2)}`;
+
+        openModal('invoice-modal');
+        lucide.createIcons();
+    } catch (err) {
+        alert('Error fetching invoice: ' + err.message);
+    }
+}
+
+function printActiveReceipt() {
+    if (!activeInvoiceId) return;
+    const printUrl = `${API_URL}/api/v1/billing/invoices/${activeInvoiceId}/receipt`;
+    const win = window.open(printUrl, '_blank', 'width=400,height=600');
+    if (win) {
+        win.focus();
+    } else {
+        alert('Please allow popups to print the thermal receipt.');
+    }
+}
+
+// Bind to window for HTML onclick handlers
+window.viewInvoiceDetails = viewInvoiceDetails;
+window.loadSalesData = loadSalesData;
+window.printActiveReceipt = printActiveReceipt;

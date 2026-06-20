@@ -12,7 +12,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Socket.IO Client -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
 
@@ -99,6 +99,10 @@
                     <i data-lucide="clipboard-list"></i>
                     <span>Audit Logs</span>
                 </button>
+                <button class="nav-item" data-tab="sales" id="nav-sales">
+                    <i data-lucide="receipt"></i>
+                    <span>Sales History</span>
+                </button>
             </nav>
             
             <div class="sidebar-user">
@@ -152,6 +156,20 @@
                             <i data-lucide="x-circle" class="stat-icon text-danger"></i>
                         </div>
                         <div class="stat-value" id="stat-out-of-stock">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Today's Sales Count</span>
+                            <i data-lucide="shopping-cart" class="stat-icon text-accent" style="color: var(--color-secondary);"></i>
+                        </div>
+                        <div class="stat-value" id="stat-todays-sales">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Today's Revenue</span>
+                            <i data-lucide="indian-rupee" class="stat-icon text-success" style="color: var(--color-success);"></i>
+                        </div>
+                        <div class="stat-value" id="stat-todays-revenue">₹0.00</div>
                     </div>
                 </div>
 
@@ -214,8 +232,8 @@
                                     <th>Category</th>
                                     <th>Supplier</th>
                                     <th>Unit</th>
-                                    <th>Cost Price</th>
-                                    <th>Sell Price</th>
+                                    <th>Cost Price (₹)</th>
+                                    <th>Sell Price (₹)</th>
                                     <th class="text-right admin-manager-only">Actions</th>
                                 </tr>
                             </thead>
@@ -259,6 +277,7 @@
                                     <th>Current Quantity</th>
                                     <th>Min Req</th>
                                     <th>Max Limit</th>
+                                    <th>Status Bar</th>
                                     <th>Status</th>
                                     <th>Last Updated</th>
                                     <th class="text-right">Stock Control</th>
@@ -319,6 +338,57 @@
                     </div>
                 </div>
             </section>
+
+            <!-- ── TAB CONTENT: SALES HISTORY ── -->
+            <section id="tab-sales" class="tab-panel hidden">
+                <div class="table-actions">
+                    <div class="search-filters">
+                        <div class="location-select-wrapper">
+                            <label for="sales-location-filter" class="field-label">Location:</label>
+                            <select id="sales-location-filter" class="select-large">
+                                <option value="">All Locations</option>
+                            </select>
+                        </div>
+                        <div class="location-select-wrapper">
+                            <label for="sales-payment-filter" class="field-label">Payment Mode:</label>
+                            <select id="sales-payment-filter" class="select-large">
+                                <option value="">All Payments</option>
+                                <option value="cash">Cash</option>
+                                <option value="upi">UPI</option>
+                                <option value="card">Card</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-ghost" id="refresh-sales-btn">
+                        <i data-lucide="refresh-cw"></i> Refresh Sales
+                    </button>
+                </div>
+
+                <div class="card card-table">
+                    <div class="table-wrapper">
+                        <table class="table" id="sales-table">
+                            <thead>
+                                <tr>
+                                    <th>Invoice No</th>
+                                    <th>Date</th>
+                                    <th>Location</th>
+                                    <th>Cashier</th>
+                                    <th>Customer</th>
+                                    <th>Payment</th>
+                                    <th>Subtotal (₹)</th>
+                                    <th>Tax (₹)</th>
+                                    <th>Discount (₹)</th>
+                                    <th>Total Amount (₹)</th>
+                                    <th class="text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="11" class="text-center text-muted">Loading sales history...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
         </main>
     </div>
 
@@ -368,12 +438,12 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="prod-cost">Cost Price ($) *</label>
+                        <label for="prod-cost">Cost Price (₹) *</label>
                         <input type="number" id="prod-cost" step="0.01" min="0" required placeholder="45.00">
                     </div>
 
                     <div class="form-group">
-                        <label for="prod-sell">Sell Price ($) *</label>
+                        <label for="prod-sell">Sell Price (₹) *</label>
                         <input type="number" id="prod-sell" step="0.01" min="0" required placeholder="74.99">
                     </div>
 
@@ -510,7 +580,88 @@
             </form>
         </div>
     </div>
+    <!-- ── 🛠️ INVOICE DETAIL MODAL ── -->
+    <div id="invoice-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Invoice Details</h3>
+                <button class="modal-close" data-close-modal="invoice-modal"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-summary-panel">
+                <div class="form-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                    <div class="summary-row col-span-2">
+                        <span class="label">Invoice Number: </span>
+                        <span class="value" id="inv-detail-number" style="font-weight: bold; color: var(--color-secondary);">INV-XXXX-XXXXX</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="label">Date: </span>
+                        <span class="value" id="inv-detail-date">N/A</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="label">Location: </span>
+                        <span class="value" id="inv-detail-location">N/A</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="label">Cashier: </span>
+                        <span class="value" id="inv-detail-cashier">N/A</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="label">Customer: </span>
+                        <span class="value" id="inv-detail-customer">Anonymous/Walk-in</span>
+                    </div>
+                </div>
+            </div>
 
-    <script src="app.js"></script>
+            <div class="card card-table" style="margin-top: 15px;">
+                <div class="table-wrapper">
+                    <table class="table" id="invoice-items-table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Qty</th>
+                                <th>Unit Price (₹)</th>
+                                <th>Tax %</th>
+                                <th>Tax Amt (₹)</th>
+                                <th>Total (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Dynamic items -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: 15px;">
+                <div style="width: 250px;">
+                    <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+                        <span>Subtotal:</span>
+                        <span id="inv-detail-subtotal">₹0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+                        <span>GST:</span>
+                        <span id="inv-detail-tax">₹0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+                        <span>Discount:</span>
+                        <span id="inv-detail-discount">-₹0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--border-color); font-weight: bold; font-size: 16px; color: var(--color-success);">
+                        <span>Net Total:</span>
+                        <span id="inv-detail-total">₹0.00</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" data-close-modal="invoice-modal">Close</button>
+                <button type="button" class="btn btn-primary" id="btn-print-receipt">
+                    <i data-lucide="printer"></i> Print Receipt
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=2"></script>
 </body>
 </html>

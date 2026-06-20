@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import auth, audit, inventory, pending, products, reports, users
+from app.routers import auth, audit, inventory, pending, products, reports, users, billing
 from app.sockets.events import socket_app
 
 
@@ -53,6 +53,8 @@ def create_app() -> FastAPI:
     application.include_router(reports.router)
     application.include_router(users.router)
     application.include_router(audit.router)
+    application.include_router(billing.router)
+
 
     # ── Mount Socket.IO ──────────────────────────────────────────
     application.mount("/ws", socket_app)

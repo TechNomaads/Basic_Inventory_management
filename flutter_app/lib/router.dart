@@ -15,6 +15,7 @@ import 'features/auth/domain/auth_notifier.dart';
 import 'features/auth/presentation/login_screen.dart';
 import 'features/dashboard/presentation/dashboard_screen.dart';
 import 'features/scanner/presentation/scanner_screen.dart';
+import 'features/scanner/domain/scan_mode.dart';
 import 'features/product/presentation/product_detail_screen.dart';
 import 'features/inventory/presentation/transaction_history_screen.dart';
 import 'features/reports/presentation/reports_screen.dart';
@@ -23,9 +24,12 @@ import 'features/products_mgmt/presentation/add_edit_product_screen.dart';
 import 'features/users_mgmt/presentation/user_list_screen.dart';
 import 'features/users_mgmt/presentation/add_user_screen.dart';
 import 'features/audit/presentation/audit_log_screen.dart';
+import 'features/billing/presentation/billing_screen.dart';
+import 'features/billing/presentation/invoice_success_screen.dart';
 
 /// GoRouter provider that rebuilds on auth state changes
 final routerProvider = Provider<GoRouter>((ref) {
+
   final authState = ref.watch(authNotifierProvider);
 
   return GoRouter(
@@ -53,7 +57,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/scanner',
-        builder: (context, state) => const ScannerScreen(),
+        builder: (context, state) {
+          final modeStr = state.uri.queryParameters['mode'] ?? 'inventory';
+          final mode = ScanMode.values.byName(modeStr);
+          return ScannerScreen(initialMode: mode);
+        },
       ),
       GoRoute(
         path: '/product/:barcode',
@@ -96,6 +104,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/audit',
         builder: (context, state) => const AuditLogScreen(),
+      ),
+      GoRoute(
+        path: '/billing',
+        builder: (context, state) => const BillingScreen(),
+      ),
+      GoRoute(
+        path: '/billing/success',
+        builder: (context, state) => const InvoiceSuccessScreen(),
       ),
     ],
   );

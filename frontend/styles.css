@@ -1,28 +1,28 @@
 /* ── DESIGN SYSTEM & CONSTANTS ── */
 :root {
-    /* Colors - Curated Slate Dark Theme */
-    --bg-base: #0b0f19;
-    --bg-card: rgba(18, 26, 44, 0.65);
-    --bg-sidebar: #0f172a;
-    --border-color: rgba(255, 255, 255, 0.08);
-    --border-hover: rgba(255, 255, 255, 0.15);
+    /* Colors - Curated Premium Light Theme */
+    --bg-base: #f8fafc;             /* Slate 50 - Page background */
+    --bg-card: #ffffff;             /* Pure White - Cards & Panels */
+    --bg-sidebar: #ffffff;          /* Pure White - Sidebar background */
+    --border-color: #e2e8f0;        /* Slate 200 - Clean crisp borders */
+    --border-hover: #cbd5e1;        /* Slate 300 - Border on hover */
     
-    --text-primary: #f8fafc;
-    --text-muted: #94a3b8;
-    --text-hint: #64748b;
+    --text-primary: #0f172a;        /* Slate 900 - High-contrast text */
+    --text-muted: #475569;          /* Slate 600 - Muted secondary text */
+    --text-hint: #94a3b8;           /* Slate 400 - Hint/placeholder text */
     
     /* Brand Accents */
-    --color-primary: #4f46e5;       /* Indigo */
-    --color-primary-glow: rgba(79, 70, 229, 0.35);
-    --color-secondary: #0ea5e9;     /* Sky */
+    --color-primary: #2563eb;       /* Professional Cobalt Blue */
+    --color-primary-glow: rgba(37, 99, 235, 0.08); /* Faded glow for active items */
+    --color-secondary: #0284c7;     /* Professional Sky Blue */
     
     /* Semantic Status Colors */
-    --color-success: #10b981;       /* Emerald */
-    --color-success-bg: rgba(16, 185, 129, 0.12);
-    --color-warning: #f59e0b;       /* Amber */
-    --color-warning-bg: rgba(245, 158, 11, 0.12);
-    --color-danger: #ef4444;        /* Rose */
-    --color-danger-bg: rgba(239, 68, 68, 0.12);
+    --color-success: #16a34a;       /* Emerald Green */
+    --color-success-bg: #f0fdf4;    /* Very soft green background */
+    --color-warning: #d97706;       /* Amber Yellow */
+    --color-warning-bg: #fffbeb;    /* Very soft amber background */
+    --color-danger: #dc2626;        /* Rose Red */
+    --color-danger-bg: #fef2f2;     /* Very soft red background */
     
     /* Typography */
     --font-display: 'Outfit', sans-serif;
@@ -64,10 +64,7 @@ body {
     z-index: -1;
     pointer-events: none;
     overflow: hidden;
-    background: 
-        radial-gradient(circle at 10% 10%, rgba(79, 70, 229, 0.15) 0%, transparent 45%),
-        radial-gradient(circle at 80% 80%, rgba(14, 165, 233, 0.12) 0%, transparent 50%),
-        radial-gradient(circle at 50% 40%, rgba(16, 185, 129, 0.05) 0%, transparent 40%);
+    background: var(--bg-base);
 }
 
 /* ── SCROLLBARS ── */
@@ -79,11 +76,11 @@ body {
     background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.15);
     border-radius: var(--radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.25);
 }
 
 /* ── UTILITIES ── */
@@ -132,7 +129,7 @@ body {
     color: var(--text-primary);
 }
 .btn-ghost:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.04);
     border-color: var(--border-hover);
 }
 
@@ -144,7 +141,7 @@ body {
     color: var(--text-muted);
 }
 .btn-icon:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.04);
     color: var(--text-primary);
     border-color: var(--border-hover);
 }
@@ -219,7 +216,7 @@ body {
 input, select, textarea {
     width: 100%;
     padding: 10px 14px;
-    background: rgba(15, 23, 42, 0.6);
+    background: #ffffff;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
@@ -235,7 +232,7 @@ input:focus, select:focus, textarea:focus {
     outline: none;
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px var(--color-primary-glow);
-    background: rgba(15, 23, 42, 0.9);
+    background: #ffffff;
 }
 
 .field-hint {
@@ -308,7 +305,7 @@ input:focus, select:focus, textarea:focus {
     background: var(--color-danger-bg);
     border: 1px solid rgba(239, 68, 68, 0.2);
     border-radius: var(--radius-sm);
-    color: #fca5a5;
+    color: var(--color-danger);
     font-size: 13px;
     margin-bottom: 20px;
 }
@@ -337,7 +334,7 @@ input:focus, select:focus, textarea:focus {
     gap: 6px;
     font-size: 12px;
     color: var(--text-muted);
-    background: rgba(0, 0, 0, 0.2);
+    background: #f1f5f9;
     padding: 10px;
     border-radius: var(--radius-sm);
 }
@@ -412,12 +409,12 @@ input:focus, select:focus, textarea:focus {
 }
 .nav-item:hover {
     color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.03);
+    background: #f1f5f9;
 }
 .nav-item.active {
-    color: #ffffff;
-    background: rgba(79, 70, 229, 0.15);
-    border: 1px solid rgba(79, 70, 229, 0.3);
+    color: var(--color-primary);
+    background: var(--color-primary-glow);
+    border: 1px solid rgba(37, 99, 235, 0.2);
 }
 .nav-item.active::before {
     content: '';
@@ -441,7 +438,7 @@ input:focus, select:focus, textarea:focus {
     display: flex;
     align-items: center;
     gap: 12px;
-    background: rgba(0, 0, 0, 0.15);
+    background: #f8fafc;
 }
 .user-avatar {
     width: 36px;
@@ -555,7 +552,7 @@ input:focus, select:focus, textarea:focus {
 /* ── STATS CARDS GRID ── */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 24px;
     margin-bottom: 32px;
 }
@@ -630,10 +627,10 @@ input:focus, select:focus, textarea:focus {
     vertical-align: middle;
 }
 .table th {
-    background: rgba(0, 0, 0, 0.2);
+    background: #f1f5f9;
     font-family: var(--font-display);
     font-weight: 600;
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -642,7 +639,7 @@ input:focus, select:focus, textarea:focus {
     border-bottom: none;
 }
 .table tbody tr:hover td {
-    background: rgba(255, 255, 255, 0.02);
+    background: #f8fafc;
 }
 
 /* Stock Status Badges */
@@ -660,17 +657,17 @@ input:focus, select:focus, textarea:focus {
 }
 .badge-green {
     background-color: var(--color-success-bg);
-    color: #a7f3d0;
+    color: #15803d;
     border-color: rgba(16, 185, 129, 0.2);
 }
 .badge-amber {
     background-color: var(--color-warning-bg);
-    color: #fde68a;
+    color: #b45309;
     border-color: rgba(245, 158, 11, 0.2);
 }
 .badge-red {
     background-color: var(--color-danger-bg);
-    color: #fecdd3;
+    color: #b91c1c;
     border-color: rgba(239, 68, 68, 0.2);
 }
 .badge-accent {
@@ -686,12 +683,12 @@ input:focus, select:focus, textarea:focus {
     font-weight: 600;
     text-transform: capitalize;
 }
-.tx-type-receive { background: rgba(16, 185, 129, 0.15); color: #34d399; }
-.tx-type-dispatch { background: rgba(14, 165, 233, 0.15); color: #38bdf8; }
-.tx-type-adjustment { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
-.tx-type-transfer_in { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
-.tx-type-transfer_out { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
-.tx-type-damage { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+.tx-type-receive { background: #f0fdf4; color: #16a34a; }
+.tx-type-dispatch { background: #f0f9ff; color: #0284c7; }
+.tx-type-adjustment { background: #faf5ff; color: #9333ea; }
+.tx-type-transfer_in { background: #eff6ff; color: #2563eb; }
+.tx-type-transfer_out { background: #eef2ff; color: #4f46e5; }
+.tx-type-damage { background: #fef2f2; color: #dc2626; }
 
 /* ── TABLE ACTIONS BAR ── */
 .table-actions {
@@ -751,7 +748,7 @@ input:focus, select:focus, textarea:focus {
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(11, 15, 25, 0.8);
+    background: rgba(15, 23, 42, 0.45);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     display: flex;
@@ -763,12 +760,12 @@ input:focus, select:focus, textarea:focus {
 }
 
 .modal-card {
-    background: #0f172a;
+    background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     width: 100%;
     max-width: 680px;
-    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
     animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
     overflow: hidden;
 }
@@ -826,7 +823,7 @@ input:focus, select:focus, textarea:focus {
 
 /* Modal Summary Details Banner */
 .modal-summary-panel {
-    background: rgba(0, 0, 0, 0.2);
+    background: #f8fafc;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     padding: 14px 18px;
@@ -856,7 +853,7 @@ input:focus, select:focus, textarea:focus {
     border: 1px solid rgba(14, 165, 233, 0.2);
     padding: 12px 16px;
     border-radius: var(--radius-sm);
-    color: #bae6fd;
+    color: #0369a1;
     font-size: 12.5px;
     line-height: 1.6;
     margin-bottom: 20px;
@@ -872,6 +869,34 @@ input:focus, select:focus, textarea:focus {
 /* Role restriction overlays */
 .admin-manager-only {
     /* Set visually, script will block/hide element if role doesn't match */
+}
+
+/* Status Bar Column */
+.status-bar-container {
+    width: 100px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: middle;
+}
+.status-bar-fill {
+    height: 100%;
+    border-radius: var(--radius-full);
+    transition: width var(--transition-fast) ease-in-out;
+}
+.status-bar-fill.green {
+    background-color: var(--color-success);
+    box-shadow: 0 0 6px var(--color-success);
+}
+.status-bar-fill.amber {
+    background-color: var(--color-warning);
+    box-shadow: 0 0 6px var(--color-warning);
+}
+.status-bar-fill.red {
+    background-color: var(--color-danger);
+    box-shadow: 0 0 6px var(--color-danger);
 }
 
 /* ── ANIMATIONS ── */
@@ -922,3 +947,30 @@ input:focus, select:focus, textarea:focus {
         grid-template-columns: 1fr;
     }
 }
+
+/* ── PAYMENT MODE BADGES ── */
+.payment-mode-tag {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.payment-cash {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--color-success);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+.payment-upi {
+    background: rgba(14, 165, 233, 0.15);
+    color: var(--color-secondary);
+    border: 1px solid rgba(14, 165, 233, 0.2);
+}
+.payment-card {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--color-warning);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+

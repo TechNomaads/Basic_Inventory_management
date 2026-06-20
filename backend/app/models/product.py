@@ -66,6 +66,7 @@ class ProductModel(Base):
     unit: Mapped[str] = mapped_column(String(30), default="pcs", server_default="pcs")
     cost_price: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     sell_price: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    tax_rate: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False, default=18.0, server_default="18.0")
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(

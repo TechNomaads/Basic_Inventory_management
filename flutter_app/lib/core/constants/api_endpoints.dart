@@ -43,6 +43,8 @@ class ApiEndpoints {
   // ── Reports ────────────────────────────────────────────────────
   static const String reportsSummary = '/api/v1/reports/summary';
   static const String reportsTransactions = '/api/v1/reports/transactions';
+  static const String reportsSalesTrend = '/api/v1/reports/sales-trend';
+  static const String reportsCategoryStock = '/api/v1/reports/category-stock';
 
   // ── Users ──────────────────────────────────────────────────────
   static const String users = '/api/v1/users';
@@ -52,4 +54,20 @@ class ApiEndpoints {
 
   // ── Audit ──────────────────────────────────────────────────────
   static const String audit = '/api/v1/audit';
+
+  // ── Billing ────────────────────────────────────────────────────
+  static const String checkout = '/api/v1/billing/checkout';
+  static const String invoices = '/api/v1/billing/invoices';
+  static String invoiceDetail(String id) => '/api/v1/billing/invoices/$id';
+  static String thermalReceipt(String id) => '/api/v1/billing/invoices/$id/receipt';
+  static String customerLookup(String phone) =>
+      '/api/v1/billing/customers/lookup?phone=${Uri.encodeQueryComponent(phone)}';
+  static const String dailySalesSummary = '/api/v1/billing/daily-summary';
+
+  // ── Inventory Quick Adjust ─────────────────────────────────────
+  static const String quickAdjust = '/api/v1/inventory/quick-adjust';
+
+  // ── Inventory Metadata ─────────────────────────────────────────
+  static const String locationsMeta = '/api/v1/inventory/meta/locations';
 }
+
