@@ -181,6 +181,27 @@ async def process_checkout(
     discount_amount = float(data.discount_amount)
     total_amount = max(0.0, subtotal + total_tax - discount_amount)
 
+    # Validate payment and credit limit
+    amount_paid = float(data.amount_paid) if data.amount_paid is not None else total_amount
+    
+    if customer:
+        remaining_balance = total_amount - amount_paid
+        new_overdue = float(customer.overdue_amount) + remaining_balance
+        if new_overdue > float(customer.credit_limit):
+            raise ConflictException(
+                f"Checkout rejected: Purchase exceeds credit limit. "
+                f"Limit: ₹{customer.credit_limit:.2f}, Current Overdue: ₹{customer.overdue_amount:.2f}, "
+                f"New Overdue would be: ₹{new_overdue:.2f}"
+            )
+        # Adjust overdue amount
+        customer.overdue_amount = float(customer.overdue_amount) + remaining_balance
+    else:
+        if amount_paid < total_amount:
+            raise ConflictException(
+                "Checkout rejected: Walk-in customers without registered profiles must pay in full."
+            )
+        amount_paid = total_amount
+
     # 3. Generate Invoice Number (locks sequence)
     invoice_number = await generate_invoice_number(db)
 
@@ -195,6 +216,7 @@ async def process_checkout(
         tax_amount=total_tax,
         discount_amount=discount_amount,
         total_amount=total_amount,
+        amount_paid=amount_paid,
         payment_mode=data.payment_mode,
         notes=data.notes,
         created_at=datetime.now(timezone.utc),

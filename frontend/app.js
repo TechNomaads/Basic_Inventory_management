@@ -16,6 +16,10 @@ const state = {
     // Pagination for products
     productPage: 1,
     productSize: 20,
+
+    // Pagination for customers
+    customerPage: 1,
+    customerSize: 20,
     
     // Active inventory location
     selectedLocationId: null,
@@ -28,6 +32,8 @@ const state = {
         items: [],
         customer_name: '',
         customer_phone: '',
+        customer_credit_limit: null,
+        customer_overdue_amount: null,
         discount_amount: 0.0,
         payment_mode: 'cash',
         notes: ''
@@ -107,6 +113,34 @@ function bindEvents() {
     document.getElementById('product-form').addEventListener('submit', handleProductSubmit);
     document.getElementById('tx-form').addEventListener('submit', handleTransactionSubmit);
     document.getElementById('adjustment-form').addEventListener('submit', handleAdjustmentSubmit);
+    document.getElementById('customer-form').addEventListener('submit', handleCustomerSubmit);
+
+    // Customer Tab Bindings
+    const customersSearch = document.getElementById('customers-search');
+    if (customersSearch) {
+        customersSearch.addEventListener('input', debounce(() => {
+            state.customerPage = 1;
+            loadCustomersData();
+        }, 300));
+    }
+    const btnCustomersPrev = document.getElementById('btn-customers-prev');
+    if (btnCustomersPrev) {
+        btnCustomersPrev.addEventListener('click', () => changeCustomerPage(-1));
+    }
+    const btnCustomersNext = document.getElementById('btn-customers-next');
+    if (btnCustomersNext) {
+        btnCustomersNext.addEventListener('click', () => changeCustomerPage(1));
+    }
+    const btnAddCustomer = document.getElementById('btn-add-customer');
+    if (btnAddCustomer) {
+        btnAddCustomer.addEventListener('click', () => openCustomerModal());
+    }
+
+    // POS Amount Paid listener
+    const posAmountPaid = document.getElementById('pos-amount-paid');
+    if (posAmountPaid) {
+        posAmountPaid.addEventListener('input', handlePosAmountPaidInput);
+    }
 
     // Billing / POS Tab Bindings
     const posLocationSelect = document.getElementById('pos-location-select');
@@ -231,6 +265,22 @@ function bindEvents() {
     ScannerService.initHardwareScanner((barcode) => {
         handleBarcodeScanned(barcode, 'global');
     });
+
+    // Dashboard interactive cards
+    const cardTotalProducts = document.getElementById('card-total-products');
+    if (cardTotalProducts) cardTotalProducts.addEventListener('click', () => showMetricDetails('total-products'));
+
+    const cardLowStock = document.getElementById('card-low-stock');
+    if (cardLowStock) cardLowStock.addEventListener('click', () => showMetricDetails('low-stock'));
+
+    const cardOutOfStock = document.getElementById('card-out-of-stock');
+    if (cardOutOfStock) cardOutOfStock.addEventListener('click', () => showMetricDetails('out-of-stock'));
+
+    const cardTodaysSales = document.getElementById('card-todays-sales');
+    if (cardTodaysSales) cardTodaysSales.addEventListener('click', () => showMetricDetails('todays-sales'));
+
+    const cardTodaysRevenue = document.getElementById('card-todays-revenue');
+    if (cardTodaysRevenue) cardTodaysRevenue.addEventListener('click', () => showMetricDetails('todays-revenue'));
 }
 
 // ── AUTHENTICATION CONTROLLERS ──
@@ -371,7 +421,8 @@ function switchTab(tabName) {
         'billing': 'Point of Sale (POS) Billing',
         'pending': 'Pending Adjustments Approval',
         'audit': 'System Audit Logs',
-        'sales': 'Sales Invoice History'
+        'sales': 'Sales Invoice History',
+        'customers': 'Customer Directory'
     };
     document.getElementById('current-tab-title').textContent = titleMap[tabName] || 'Dashboard';
 
@@ -399,6 +450,8 @@ function switchTab(tabName) {
         loadAuditLogs();
     } else if (tabName === 'sales') {
         loadSalesData();
+    } else if (tabName === 'customers') {
+        loadCustomersData();
     }
 }
 
@@ -497,6 +550,194 @@ async function loadDashboardData() {
 
     } catch (err) {
         console.error('Error loading dashboard:', err);
+    }
+}
+
+// ── CUSTOMERS CONTROLLER ──
+async function loadCustomersData() {
+    const search = document.getElementById('customers-search').value.trim();
+    let url = `${API_URL}/api/v1/customers?page=${state.customerPage}&size=${state.customerSize}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+
+    const tbody = document.querySelector('#customers-table tbody');
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Loading customer records...</td></tr>';
+
+    try {
+        const [kpis, data] = await Promise.all([
+            fetchWithAuth(`${API_URL}/api/v1/customers/kpis`),
+            fetchWithAuth(url)
+        ]);
+
+        document.getElementById('kpi-customers-count').textContent = kpis.total_count;
+        document.getElementById('kpi-customers-overdue').textContent = `₹${kpis.total_overdue.toFixed(2)}`;
+        document.getElementById('kpi-customers-credit').textContent = `₹${kpis.total_credit.toFixed(2)}`;
+
+        if (!data.items || data.items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No customer records found.</td></tr>';
+            document.getElementById('btn-customers-prev').disabled = true;
+            document.getElementById('btn-customers-next').disabled = true;
+            document.getElementById('customers-pagination-info').textContent = 'Showing 0-0 of 0';
+            return;
+        }
+
+        tbody.innerHTML = data.items.map(c => {
+            const dateStr = new Date(c.created_at).toLocaleDateString([], { dateStyle: 'medium' });
+            return `
+                <tr>
+                    <td><strong>${escapeHtml(c.name)}</strong></td>
+                    <td><code>${escapeHtml(c.phone || '—')}</code></td>
+                    <td>${c.credit_limit.toFixed(2)}</td>
+                    <td class="${c.overdue_amount > 0 ? 'text-danger font-semibold' : 'text-success'}">
+                        ₹${c.overdue_amount.toFixed(2)}
+                    </td>
+                    <td>${dateStr}</td>
+                    <td class="text-right">
+                        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                            <button class="action-btn action-btn-primary" onclick="window.editCustomer('${c.id}')" title="Edit Profile">
+                                <i data-lucide="edit-2" style="width: 16px; height: 16px;"></i>
+                            </button>
+                            <button class="action-btn" style="color: var(--color-primary);" onclick="window.showCustomerHistory('${c.id}')" title="Purchase History">
+                                <i data-lucide="history" style="width: 16px; height: 16px;"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        lucide.createIcons();
+
+        const start = (data.page - 1) * data.size + 1;
+        const end = Math.min(data.page * data.size, data.total);
+        document.getElementById('customers-pagination-info').textContent = `Showing ${start}-${end} of ${data.total}`;
+        document.getElementById('btn-customers-prev').disabled = data.page <= 1;
+        document.getElementById('btn-customers-next').disabled = data.page >= data.pages;
+
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Error: ${err.message}</td></tr>`;
+    }
+}
+
+function changeCustomerPage(delta) {
+    state.customerPage += delta;
+    loadCustomersData();
+}
+
+function openCustomerModal(customerId = null) {
+    const errorEl = document.getElementById('customer-error');
+    errorEl.classList.add('hidden');
+    
+    const form = document.getElementById('customer-form');
+    form.reset();
+    
+    if (customerId) {
+        document.getElementById('customer-modal-title').textContent = 'Edit Customer Profile';
+        fetchWithAuth(`${API_URL}/api/v1/customers/${customerId}`)
+            .then(c => {
+                document.getElementById('customer-id').value = c.id;
+                document.getElementById('customer-name').value = c.name;
+                document.getElementById('customer-phone').value = c.phone || '';
+                document.getElementById('customer-credit-limit').value = c.credit_limit.toFixed(2);
+                document.getElementById('customer-overdue').value = c.overdue_amount.toFixed(2);
+                
+                openModal('customer-modal');
+                lucide.createIcons();
+            })
+            .catch(err => {
+                alert(`Error loading customer: ${err.message}`);
+            });
+    } else {
+        document.getElementById('customer-modal-title').textContent = 'Add New Customer';
+        document.getElementById('customer-id').value = '';
+        document.getElementById('customer-credit-limit').value = '10000.00';
+        document.getElementById('customer-overdue').value = '0.00';
+        openModal('customer-modal');
+        lucide.createIcons();
+    }
+}
+
+async function handleCustomerSubmit(e) {
+    e.preventDefault();
+    const errorEl = document.getElementById('customer-error');
+    const errorText = document.getElementById('customer-error-text');
+    errorEl.classList.add('hidden');
+
+    const customerId = document.getElementById('customer-id').value;
+    const payload = {
+        name: document.getElementById('customer-name').value.trim(),
+        phone: document.getElementById('customer-phone').value.trim() || null,
+        credit_limit: parseFloat(document.getElementById('customer-credit-limit').value) || 0.0,
+        overdue_amount: parseFloat(document.getElementById('customer-overdue').value) || 0.0
+    };
+
+    try {
+        let url = `${API_URL}/api/v1/customers`;
+        let method = 'POST';
+        
+        if (customerId) {
+            url += `/${customerId}`;
+            method = 'PUT';
+        }
+
+        await fetchWithAuth(url, {
+            method: method,
+            body: JSON.stringify(payload)
+        });
+
+        closeModal('customer-modal');
+        loadCustomersData();
+    } catch (err) {
+        errorText.textContent = err.message || 'An error occurred while saving customer profile.';
+        errorEl.classList.remove('hidden');
+    }
+}
+
+async function showCustomerHistory(id) {
+    try {
+        const c = await fetchWithAuth(`${API_URL}/api/v1/customers/${id}`);
+        
+        document.getElementById('customer-history-title').textContent = `${escapeHtml(c.name)} - Purchase History`;
+        document.getElementById('hist-customer-phone').textContent = escapeHtml(c.phone || '—');
+        document.getElementById('hist-customer-limit').textContent = `₹${c.credit_limit.toFixed(2)}`;
+        document.getElementById('hist-customer-overdue').textContent = `₹${c.overdue_amount.toFixed(2)}`;
+
+        const tbody = document.getElementById('customer-history-table-body');
+        if (!c.invoices || c.invoices.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">No invoices found for this customer.</td></tr>';
+        } else {
+            tbody.innerHTML = c.invoices.map(inv => {
+                const dateStr = new Date(inv.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+                const dueAmount = inv.total_amount - inv.amount_paid;
+                const statusTag = dueAmount <= 0.01 
+                    ? `<span class="badge badge-green">Fully Paid</span>` 
+                    : `<span class="badge badge-amber">Credit Due</span>`;
+                
+                return `
+                    <tr>
+                        <td><strong>${escapeHtml(inv.invoice_no)}</strong></td>
+                        <td>${dateStr}</td>
+                        <td>${escapeHtml(inv.location_name || 'N/A')}</td>
+                        <td>${inv.subtotal.toFixed(2)}</td>
+                        <td>${inv.tax_amount.toFixed(2)}</td>
+                        <td>${inv.discount_amount.toFixed(2)}</td>
+                        <td class="font-semibold">₹${inv.total_amount.toFixed(2)}</td>
+                        <td class="text-success font-semibold">₹${inv.amount_paid.toFixed(2)}</td>
+                        <td class="text-danger font-semibold">₹${dueAmount.toFixed(2)}</td>
+                        <td>${statusTag}</td>
+                        <td class="text-right">
+                            <button class="action-btn" onclick="window.viewInvoiceDetails('${inv.id}')" title="View Details">
+                                <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        lucide.createIcons();
+        openModal('customer-history-modal');
+    } catch (err) {
+        alert(`Error fetching history: ${err.message}`);
     }
 }
 
@@ -1236,6 +1477,11 @@ async function viewInvoiceDetails(id) {
         document.getElementById('inv-detail-discount').textContent = `-₹${invoice.discount_amount.toFixed(2)}`;
         document.getElementById('inv-detail-total').textContent = `₹${invoice.total_amount.toFixed(2)}`;
 
+        const amountPaid = invoice.amount_paid || 0.0;
+        const amountDue = Math.max(0.0, invoice.total_amount - amountPaid);
+        document.getElementById('inv-detail-paid').textContent = `₹${amountPaid.toFixed(2)}`;
+        document.getElementById('inv-detail-due').textContent = `₹${amountDue.toFixed(2)}`;
+
         openModal('invoice-modal');
         lucide.createIcons();
     } catch (err) {
@@ -1261,6 +1507,9 @@ async function initBillingTab() {
         items: [],
         customer_name: '',
         customer_phone: '',
+        customer_credit_limit: null,
+        customer_overdue_amount: null,
+        amount_paid_edited: false,
         discount_amount: 0.0,
         payment_mode: 'cash',
         notes: ''
@@ -1272,9 +1521,14 @@ async function initBillingTab() {
     document.getElementById('pos-notes').value = '';
     document.getElementById('pos-bill-discount').value = '0.00';
     document.getElementById('pos-product-search').value = '';
+    document.getElementById('pos-amount-paid').value = '0.00';
     document.getElementById('pos-search-clear').classList.add('hidden');
     document.getElementById('pos-search-results').classList.add('hidden');
     document.getElementById('pos-error').classList.add('hidden');
+    document.getElementById('pos-customer-credit-info').classList.add('hidden');
+    document.getElementById('pos-credit-warning').classList.add('hidden');
+    document.getElementById('pos-amount-due-row').style.display = 'none';
+    document.getElementById('pos-checkout-btn').disabled = false;
 
     // Reset payment buttons
     document.querySelectorAll('.btn-payment').forEach(btn => {
@@ -1560,10 +1814,30 @@ function calculateCartTotals() {
     document.getElementById('pos-summary-tax').textContent = `₹${tax.toFixed(2)}`;
     document.getElementById('pos-summary-item-discount').textContent = `-₹${itemDiscount.toFixed(2)}`;
     document.getElementById('pos-summary-total').textContent = `₹${netTotal.toFixed(2)}`;
+
+    // Set default amount paid if user hasn't edited it manually
+    const paidInput = document.getElementById('pos-amount-paid');
+    if (paidInput && !state.cart.amount_paid_edited) {
+        paidInput.value = netTotal.toFixed(2);
+    }
+    recalculateAmountPaidAndValidate();
 }
 
 async function handleCustomerPhoneLookup(e) {
     const phone = e.target.value.trim();
+    
+    if (phone.length === 0) {
+        state.cart.customer_name = '';
+        state.cart.customer_phone = '';
+        state.cart.customer_credit_limit = null;
+        state.cart.customer_overdue_amount = null;
+        document.getElementById('pos-customer-name').value = '';
+        document.getElementById('pos-customer-credit-info').classList.add('hidden');
+        document.getElementById('pos-credit-warning').classList.add('hidden');
+        recalculateAmountPaidAndValidate();
+        return;
+    }
+
     if (phone.length < 10) return;
 
     try {
@@ -1571,8 +1845,94 @@ async function handleCustomerPhoneLookup(e) {
         document.getElementById('pos-customer-name').value = customer.name;
         state.cart.customer_name = customer.name;
         state.cart.customer_phone = customer.phone;
+        state.cart.customer_credit_limit = customer.credit_limit;
+        state.cart.customer_overdue_amount = customer.overdue_amount;
+        
+        document.getElementById('pos-credit-overdue').textContent = `₹${customer.overdue_amount.toFixed(2)}`;
+        document.getElementById('pos-credit-limit').textContent = `₹${customer.credit_limit.toFixed(2)}`;
+        document.getElementById('pos-customer-credit-info').classList.remove('hidden');
+        
+        // Default amount paid to net total
+        const totalText = document.getElementById('pos-summary-total').textContent.replace('₹', '');
+        const netTotal = parseFloat(totalText) || 0.0;
+        document.getElementById('pos-amount-paid').value = netTotal.toFixed(2);
+        
+        recalculateAmountPaidAndValidate();
     } catch (err) {
-        console.log('Customer phone lookup: not found or error');
+        console.log('Customer phone lookup: not found or error', err);
+        state.cart.customer_credit_limit = null;
+        state.cart.customer_overdue_amount = null;
+        document.getElementById('pos-customer-credit-info').classList.add('hidden');
+        document.getElementById('pos-credit-warning').classList.add('hidden');
+        recalculateAmountPaidAndValidate();
+    }
+}
+
+function handlePosAmountPaidInput(e) {
+    state.cart.amount_paid_edited = true;
+    recalculateAmountPaidAndValidate();
+}
+
+function recalculateAmountPaidAndValidate() {
+    const paidInput = document.getElementById('pos-amount-paid');
+    if (!paidInput) return;
+
+    const totalText = document.getElementById('pos-summary-total').textContent.replace('₹', '');
+    const netTotal = parseFloat(totalText) || 0.0;
+    
+    let paidVal = parseFloat(paidInput.value);
+    if (isNaN(paidVal) || paidVal < 0) {
+        paidVal = 0.0;
+    }
+
+    const remaining = netTotal - paidVal;
+    
+    const amountDueRow = document.getElementById('pos-amount-due-row');
+    const amountDueLabel = document.getElementById('pos-amount-due-label');
+    const amountDueVal = document.getElementById('pos-amount-due-val');
+    const creditWarning = document.getElementById('pos-credit-warning');
+    const checkoutBtn = document.getElementById('pos-checkout-btn');
+    
+    // Reset state
+    amountDueRow.style.display = 'none';
+    creditWarning.classList.add('hidden');
+    checkoutBtn.disabled = false;
+    
+    const hasCustomer = !!state.cart.customer_phone;
+    
+    if (Math.abs(remaining) > 0.005) {
+        amountDueRow.style.display = 'flex';
+        amountDueVal.textContent = `₹${Math.abs(remaining).toFixed(2)}`;
+        
+        if (remaining > 0) {
+            amountDueLabel.textContent = 'Remaining Balance (Due):';
+            amountDueVal.style.color = 'var(--color-danger)';
+        } else {
+            amountDueLabel.textContent = 'Excess Payment (Credit):';
+            amountDueVal.style.color = 'var(--color-success)';
+        }
+    }
+    
+    if (!hasCustomer) {
+        if (Math.abs(remaining) > 0.01) {
+            checkoutBtn.disabled = true;
+            const errorEl = document.getElementById('pos-error');
+            const errorText = document.getElementById('pos-error-text');
+            errorText.textContent = 'Walk-in customer must pay the net total amount in full.';
+            errorEl.classList.remove('hidden');
+        } else {
+            document.getElementById('pos-error').classList.add('hidden');
+        }
+    } else {
+        document.getElementById('pos-error').classList.add('hidden');
+        const currentOverdue = state.cart.customer_overdue_amount || 0.0;
+        const creditLimit = state.cart.customer_credit_limit || 0.0;
+        
+        const nextOverdue = currentOverdue + remaining;
+        if (nextOverdue > creditLimit) {
+            creditWarning.classList.remove('hidden');
+            checkoutBtn.disabled = true;
+        }
     }
 }
 
@@ -1587,9 +1947,12 @@ async function submitPosCheckout() {
         return;
     }
 
+    const amountPaidVal = parseFloat(document.getElementById('pos-amount-paid').value);
+
     const payload = {
         location_id: state.selectedLocationId,
         payment_mode: state.cart.payment_mode || 'cash',
+        amount_paid: isNaN(amountPaidVal) ? null : amountPaidVal,
         discount_amount: state.cart.discount_amount || 0.0,
         notes: document.getElementById('pos-notes').value || null,
         customer_name: document.getElementById('pos-customer-name').value || null,
@@ -1640,6 +2003,11 @@ window.addPosCartItem = addPosCartItem;
 window.updateCartItemField = updateCartItemField;
 window.removePosCartItem = removePosCartItem;
 window.adjustCartQty = adjustCartQty;
+
+window.editCustomer = editCustomer;
+window.showCustomerHistory = showCustomerHistory;
+window.loadCustomersData = loadCustomersData;
+window.openCustomerModal = openCustomerModal;
 
 // ── BARCODE SCANNER CONTROLLER & SERVICE ──
 const ScannerService = {
@@ -1888,4 +2256,536 @@ function flashSearchBorder(id, status) {
         el.style.boxShadow = originalBoxShadow;
     }, 1000);
 }
+
+// ── INTERACTIVE DASHBOARD METRICS DETAIL MODAL ──
+async function showMetricDetails(metricType) {
+    openModal('metric-detail-modal');
+
+    const titleEl = document.getElementById('metric-detail-title');
+    const summaryContainer = document.getElementById('metric-summary-container');
+    const chartContainer = document.getElementById('metric-chart-container');
+    const tableHeader = document.getElementById('metric-detail-table-header');
+    const tableBody = document.getElementById('metric-detail-table-body');
+
+    // Loading states
+    summaryContainer.innerHTML = '<div class="text-muted">Loading metrics...</div>';
+    chartContainer.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--text-muted);">
+            <div class="spinner"></div>
+            <span>Generating visualization...</span>
+        </div>
+    `;
+    tableHeader.innerHTML = '';
+    tableBody.innerHTML = '<tr><td class="text-center text-muted">Loading data...</td></tr>';
+
+    try {
+        if (metricType === 'total-products') {
+            titleEl.textContent = 'Total Unique Products Details';
+
+            // Fetch products
+            const response = await fetchWithAuth(`${API_URL}/api/v1/products?page=1&size=100`);
+            const products = response.items || [];
+
+            // Category breakdown
+            const catMap = {};
+            products.forEach(p => {
+                const cat = p.category_name || 'Uncategorized';
+                catMap[cat] = (catMap[cat] || 0) + 1;
+            });
+
+            // Summary
+            summaryContainer.innerHTML = `
+                <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                    <div class="text-hint text-xs font-semibold">TOTAL UNIQUE</div>
+                    <div class="text-primary text-2xl font-bold" style="font-family: var(--font-display);">${products.length}</div>
+                </div>
+                <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                    <div class="text-hint text-xs font-semibold">CATEGORIES</div>
+                    <div class="text-secondary text-2xl font-bold" style="font-family: var(--font-display); color: var(--color-secondary);">${Object.keys(catMap).length}</div>
+                </div>
+                <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                    <div class="text-hint text-xs font-semibold">AVG BASE PRICE</div>
+                    <div class="text-success text-2xl font-bold" style="font-family: var(--font-display);">₹${(products.reduce((acc, p) => acc + (p.sell_price || 0), 0) / (products.length || 1)).toFixed(2)}</div>
+                </div>
+            `;
+
+            // Chart
+            chartContainer.innerHTML = drawCategoryBreakdownChart(catMap);
+
+            // Table
+            tableHeader.innerHTML = `
+                <th>Product Name</th>
+                <th>SKU</th>
+                <th>Category</th>
+                <th>Price</th>
+                <th>Barcode</th>
+            `;
+            tableBody.innerHTML = products.map(p => `
+                <tr>
+                    <td><strong>${escapeHtml(p.name)}</strong></td>
+                    <td>${escapeHtml(p.sku)}</td>
+                    <td><span class="badge" style="background: var(--bg-base); color: var(--text-primary); font-size: 11px;">${escapeHtml(p.category_name || 'N/A')}</span></td>
+                    <td>₹${(p.sell_price || 0).toFixed(2)}</td>
+                    <td><code style="font-size: 12px; color: var(--text-muted);">${escapeHtml(p.barcode)}</code></td>
+                </tr>
+            `).join('');
+
+        } else if (metricType === 'low-stock' || metricType === 'out-of-stock') {
+            const isOutOfStock = metricType === 'out-of-stock';
+            titleEl.textContent = isOutOfStock ? 'Out of Stock Items Details' : 'Low Stock Items Details';
+
+            // Fetch inventory across all locations
+            let locations = state.locations;
+            if (!locations || locations.length === 0) {
+                locations = await fetchWithAuth(`${API_URL}/api/v1/inventory/meta/locations`);
+            }
+            
+            let items = [];
+            for (const loc of locations) {
+                try {
+                    const locItems = await fetchWithAuth(`${API_URL}/api/v1/inventory/${loc.id}`);
+                    items = items.concat(locItems);
+                } catch (e) {
+                    console.error(`Error loading inventory for location ${loc.name}:`, e);
+                }
+            }
+            
+            // Filter
+            const filtered = items.filter(item => {
+                if (isOutOfStock) {
+                    return item.quantity <= 0;
+                } else {
+                    return item.quantity < item.min_quantity && item.min_quantity > 0;
+                }
+            });
+
+            // Summary
+            summaryContainer.innerHTML = `
+                <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                    <div class="text-hint text-xs font-semibold">${isOutOfStock ? 'TOTAL OUT OF STOCK' : 'TOTAL LOW STOCK'}</div>
+                    <div class="text-danger text-2xl font-bold" style="font-family: var(--font-display);">${filtered.length}</div>
+                </div>
+                <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                    <div class="text-hint text-xs font-semibold">AFFECTED LOCATIONS</div>
+                    <div class="text-muted text-lg font-bold" style="padding-top: 4px; font-family: var(--font-display);">
+                        ${new Set(filtered.map(i => i.location_name)).size} Locations
+                    </div>
+                </div>
+            `;
+
+            if (filtered.length === 0) {
+                chartContainer.innerHTML = `<div class="text-muted">No items to visualize. All stocks healthy!</div>`;
+                tableBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No items in this category.</td></tr>`;
+                tableHeader.innerHTML = `<th>Product</th><th>Location</th><th>Barcode</th><th>Stock Level</th><th>Min Stock</th>`;
+                return;
+            }
+
+            // Chart
+            chartContainer.innerHTML = drawStockComparisonChart(filtered);
+
+            // Table
+            tableHeader.innerHTML = `
+                <th>Product Name</th>
+                <th>Location</th>
+                <th>Category</th>
+                <th>Stock Level</th>
+                <th>Min Stock</th>
+                <th>Status</th>
+            `;
+            tableBody.innerHTML = filtered.map(item => `
+                <tr class="${item.quantity === 0 ? 'bg-danger-soft' : ''}">
+                    <td><strong>${escapeHtml(item.product_name || 'N/A')}</strong></td>
+                    <td><span class="badge" style="background: var(--bg-base); color: var(--text-primary); font-size: 11px;">${escapeHtml(item.location_name)}</span></td>
+                    <td>${escapeHtml(item.product_category || 'N/A')}</td>
+                    <td class="font-semibold ${item.quantity === 0 ? 'text-danger' : 'text-warning'}">${item.quantity}</td>
+                    <td>${item.min_quantity}</td>
+                    <td>
+                        <span class="badge ${item.stock_status === 'red' ? 'text-danger bg-danger-soft' : 'text-warning bg-warning-soft'}" style="font-size: 11px; padding: 4px 8px; border-radius: var(--radius-full);">
+                            ${item.stock_status === 'red' ? 'CRITICAL' : 'WARNING'}
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+
+        } else if (metricType === 'todays-sales' || metricType === 'todays-revenue') {
+            const isRevenue = metricType === 'todays-revenue';
+            titleEl.textContent = isRevenue ? "Today's Revenue Breakdown" : "Today's Sales Breakdown";
+
+            // Fetch invoices
+            const invoices = await fetchWithAuth(`${API_URL}/api/v1/billing/invoices?skip=0&limit=100`);
+            
+            // Filter today's invoices
+            const todayStr = new Date().toDateString();
+            const todayInvoices = invoices.filter(inv => new Date(inv.created_at).toDateString() === todayStr);
+
+            // Totals
+            const salesCount = todayInvoices.length;
+            const totalRevenue = todayInvoices.reduce((acc, inv) => acc + inv.total_amount, 0);
+            const averageValue = salesCount > 0 ? totalRevenue / salesCount : 0;
+
+            const modeMap = { cash: 0, card: 0, upi: 0 };
+            todayInvoices.forEach(inv => {
+                const mode = inv.payment_mode ? inv.payment_mode.toLowerCase() : 'cash';
+                modeMap[mode] = (modeMap[mode] || 0) + inv.total_amount;
+            });
+
+            // Summary
+            summaryContainer.innerHTML = `
+                <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                    <div class="text-hint text-xs font-semibold">TODAY'S SALES COUNT</div>
+                    <div class="text-accent text-2xl font-bold" style="font-family: var(--font-display); color: var(--color-secondary);">${salesCount}</div>
+                </div>
+                <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                    <div class="text-hint text-xs font-semibold">TODAY'S REVENUE</div>
+                    <div class="text-success text-2xl font-bold" style="font-family: var(--font-display);">₹${totalRevenue.toFixed(2)}</div>
+                </div>
+                <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                    <div class="text-hint text-xs font-semibold">AVERAGE ORDER VALUE</div>
+                    <div class="text-primary text-2xl font-bold" style="font-family: var(--font-display);">₹${averageValue.toFixed(2)}</div>
+                </div>
+            `;
+
+            if (salesCount === 0) {
+                chartContainer.innerHTML = `<div class="text-muted">No sales processed today yet.</div>`;
+                tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No invoices found for today.</td></tr>`;
+                tableHeader.innerHTML = `<th>Invoice #</th><th>Customer</th><th>Total Amount</th><th>Payment Mode</th>`;
+                return;
+            }
+
+            // Chart
+            if (isRevenue) {
+                chartContainer.innerHTML = drawRevenueDonutChart(modeMap);
+            } else {
+                chartContainer.innerHTML = drawHourlySalesChart(todayInvoices);
+            }
+
+            // Table
+            tableHeader.innerHTML = `
+                <th>Invoice No.</th>
+                <th>Time</th>
+                <th>Customer</th>
+                <th>Subtotal</th>
+                <th>Discount</th>
+                <th>Total Paid</th>
+                <th>Payment Mode</th>
+            `;
+            tableBody.innerHTML = todayInvoices.map(inv => {
+                const timeStr = new Date(inv.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                return `
+                    <tr>
+                        <td><strong>${escapeHtml(inv.invoice_number)}</strong></td>
+                        <td>${timeStr}</td>
+                        <td>${escapeHtml(inv.customer_name || 'Walk-in Customer')}<br><span class="text-hint text-xs">${inv.customer_phone || '—'}</span></td>
+                        <td>₹${inv.subtotal.toFixed(2)}</td>
+                        <td class="text-danger">-₹${inv.discount_amount.toFixed(2)}</td>
+                        <td class="font-semibold text-success">₹${inv.total_amount.toFixed(2)}</td>
+                        <td>
+                            <span class="badge" style="font-size: 11px; font-weight:600; padding: 3px 8px; border-radius:var(--radius-full);
+                                background: ${inv.payment_mode === 'upi' ? '#eff6ff' : inv.payment_mode === 'card' ? '#f0f9ff' : '#f0fdf4'};
+                                color: ${inv.payment_mode === 'upi' ? '#2563eb' : inv.payment_mode === 'card' ? '#0284c7' : '#16a34a'};">
+                                ${inv.payment_mode.toUpperCase()}
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Initialize Lucide icons in the dynamically loaded elements
+        lucide.createIcons();
+
+    } catch (err) {
+        console.error('Error fetching metric details:', err);
+        tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Failed to load detailed data: ${err.message}</td></tr>`;
+    }
+}
+
+// ── SVG CHART GENERATORS ──
+function drawCategoryBreakdownChart(catMap) {
+    const categories = Object.keys(catMap);
+    const counts = Object.values(catMap);
+    const maxCount = Math.max(...counts, 1);
+
+    const svgWidth = 650;
+    const svgHeight = 220;
+    const barWidth = 40;
+    const spacing = 35;
+    const startX = 60;
+    const chartBottom = 170;
+
+    let barsHTML = '';
+    categories.forEach((cat, index) => {
+        const count = catMap[cat];
+        const barHeight = (count / maxCount) * 120;
+        const x = startX + index * (barWidth + spacing);
+        const y = chartBottom - barHeight;
+
+        // Clean label
+        const truncatedLabel = cat.length > 10 ? cat.substring(0, 9) + '..' : cat;
+
+        barsHTML += `
+            <!-- Grid value text -->
+            <text x="${x + barWidth / 2}" y="${y - 8}" text-anchor="middle" font-size="12" font-weight="bold" fill="var(--text-primary)">${count}</text>
+            <!-- Animated Bar -->
+            <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" fill="url(#blueGradient)" rx="4" ry="4">
+                <animate attributeName="height" from="0" to="${barHeight}" dur="0.6s" fill="freeze" />
+                <animate attributeName="y" from="${chartBottom}" to="${y}" dur="0.6s" fill="freeze" />
+            </rect>
+            <!-- Label -->
+            <text x="${x + barWidth / 2}" y="${chartBottom + 20}" text-anchor="middle" font-size="11" fill="var(--text-muted)">${escapeHtml(truncatedLabel)}</text>
+        `;
+    });
+
+    return `
+        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" width="100%" height="220" style="font-family: var(--font-body);">
+            <defs>
+                <linearGradient id="blueGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#2563eb" />
+                    <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.8" />
+                </linearGradient>
+            </defs>
+            <!-- Gridlines -->
+            <line x1="40" y1="50" x2="${svgWidth - 20}" y2="50" stroke="var(--border-color)" stroke-dasharray="3,3" />
+            <line x1="40" y1="110" x2="${svgWidth - 20}" y2="110" stroke="var(--border-color)" stroke-dasharray="3,3" />
+            <line x1="40" y1="${chartBottom}" x2="${svgWidth - 20}" y2="${chartBottom}" stroke="var(--border-color)" />
+            
+            ${barsHTML}
+        </svg>
+    `;
+}
+
+function drawStockComparisonChart(items) {
+    // Show top 7 critical products
+    const limitItems = items.slice(0, 7);
+    const svgWidth = 650;
+    const svgHeight = 220;
+    
+    const chartLeft = 200; // wider to fit "Product (Location)"
+    const chartWidth = 410;
+    const barHeight = 16;
+    const rowHeight = 24;
+    const startY = 20;
+
+    let rowsHTML = '';
+    limitItems.forEach((item, index) => {
+        const y = startY + index * rowHeight;
+        const maxVal = Math.max(item.min_quantity * 1.5, 10);
+        
+        const minValX = chartLeft + (item.min_quantity / maxVal) * chartWidth;
+        const qtyX = (item.quantity / maxVal) * chartWidth;
+
+        // Color class
+        const barColor = item.quantity === 0 ? '#ef4444' : '#f59e0b';
+        const fullLabel = `${item.product_name || 'N/A'} (${item.location_name})`;
+        const label = fullLabel.length > 25 ? fullLabel.substring(0, 24) + '..' : fullLabel;
+
+        rowsHTML += `
+            <text x="${chartLeft - 10}" y="${y + 12}" text-anchor="end" font-size="10" fill="var(--text-muted)">${escapeHtml(label)}</text>
+            
+            <!-- Min stock indicator (gray background wedge) -->
+            <rect x="${chartLeft}" y="${y}" width="${(item.min_quantity / maxVal) * chartWidth}" height="${barHeight}" fill="#f1f5f9" rx="2" stroke="#cbd5e1" stroke-dasharray="2,2"/>
+            
+            <!-- Current Stock (colored) -->
+            <rect x="${chartLeft}" y="${y}" width="0" height="${barHeight}" fill="${barColor}" rx="2">
+                <animate attributeName="width" from="0" to="${qtyX}" dur="0.6s" fill="freeze" />
+            </rect>
+            
+            <!-- Target line indicator -->
+            <line x1="${minValX}" y1="${y - 2}" x2="${minValX}" y2="${y + barHeight + 2}" stroke="#dc2626" stroke-width="1.5" />
+            
+            <text x="${chartLeft + Math.max(qtyX, 10) + 6}" y="${y + 12}" font-size="11" font-weight="bold" fill="var(--text-primary)">
+                ${item.quantity} / ${item.min_quantity}
+            </text>
+        `;
+    });
+
+    return `
+        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" width="100%" height="220" style="font-family: var(--font-body);">
+            ${rowsHTML}
+            <!-- X-axis baseline -->
+            <line x1="${chartLeft}" y1="10" x2="${chartLeft}" y2="${startY + limitItems.length * rowHeight}" stroke="var(--border-color)" />
+            <!-- Legend -->
+            <g transform="translate(${chartLeft}, ${startY + limitItems.length * rowHeight + 15})">
+                <rect x="0" y="0" width="10" height="10" fill="#f1f5f9" stroke="#cbd5e1" stroke-dasharray="2,2" />
+                <text x="15" y="9" font-size="10" fill="var(--text-muted)">Min Level</text>
+                
+                <rect x="80" y="0" width="10" height="10" fill="#ef4444" />
+                <text x="95" y="9" font-size="10" fill="var(--text-muted)">Out of Stock</text>
+
+                <rect x="170" y="0" width="10" height="10" fill="#f59e0b" />
+                <text x="185" y="9" font-size="10" fill="var(--text-muted)">Low Stock</text>
+            </g>
+        </svg>
+    `;
+}
+
+function drawRevenueDonutChart(modeMap) {
+    const total = modeMap.cash + modeMap.card + modeMap.upi;
+    const upiPercent = total > 0 ? (modeMap.upi / total) * 100 : 0;
+    const cardPercent = total > 0 ? (modeMap.card / total) * 100 : 0;
+    const cashPercent = total > 0 ? (modeMap.cash / total) * 100 : 0;
+
+    const r = 55;
+    const cx = 110;
+    const cy = 110;
+    const C = 2 * Math.PI * r; // ~345.57
+
+    // Percentages to strokes
+    const upiStroke = (upiPercent / 100) * C;
+    const cardStroke = (cardPercent / 100) * C;
+    const cashStroke = (cashPercent / 100) * C;
+
+    // Offsets
+    const upiOffset = C;
+    const cardOffset = C - upiStroke;
+    const cashOffset = C - upiStroke - cardStroke;
+
+    return `
+        <div style="display: flex; align-items: center; justify-content: center; gap: 40px; flex-wrap: wrap; width: 100%; padding: 10px;">
+            <svg width="220" height="220" viewBox="0 0 220 220" style="transform: rotate(-90deg);">
+                <!-- Background Circle -->
+                <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--border-color)" stroke-width="20" />
+                
+                <!-- UPI Segment (Cobalt Blue) -->
+                ${upiStroke > 0 ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#2563eb" stroke-width="20"
+                    stroke-dasharray="${upiStroke} ${C - upiStroke}" 
+                    stroke-dashoffset="${upiOffset}" 
+                    style="transition: stroke-dashoffset 0.6s ease;"/>` : ''}
+                
+                <!-- Card Segment (Sky Blue) -->
+                ${cardStroke > 0 ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#0284c7" stroke-width="20"
+                    stroke-dasharray="${cardStroke} ${C - cardStroke}" 
+                    stroke-dashoffset="${cardOffset}"
+                    style="transition: stroke-dashoffset 0.6s ease;"/>` : ''}
+                
+                <!-- Cash Segment (Emerald Green) -->
+                ${cashStroke > 0 ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#16a34a" stroke-width="20"
+                    stroke-dasharray="${cashStroke} ${C - cashStroke}" 
+                    stroke-dashoffset="${cashOffset}"
+                    style="transition: stroke-dashoffset 0.6s ease;"/>` : ''}
+
+                <!-- Center Hole Text (Needs rotation back to display properly) -->
+                <g transform="rotate(90, ${cx}, ${cy})">
+                    <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="11" font-weight="bold" fill="var(--text-hint)">TOTAL</text>
+                    <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="14" font-weight="800" fill="var(--text-primary)" style="font-family: var(--font-display);">₹${total.toFixed(0)}</text>
+                </g>
+            </svg>
+            
+            <div style="display: flex; flex-direction: column; gap: 15px; min-width: 180px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="width: 12px; height: 12px; border-radius: 4px; background: #2563eb;"></span>
+                    <span style="flex: 1; font-size: 13px; color: var(--text-muted);">UPI Payments</span>
+                    <strong style="font-size: 13px; fill: var(--text-primary);">₹${modeMap.upi.toFixed(2)} (${upiPercent.toFixed(0)}%)</strong>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="width: 12px; height: 12px; border-radius: 4px; background: #0284c7;"></span>
+                    <span style="flex: 1; font-size: 13px; color: var(--text-muted);">Card Payments</span>
+                    <strong style="font-size: 13px; fill: var(--text-primary);">₹${modeMap.card.toFixed(2)} (${cardPercent.toFixed(0)}%)</strong>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="width: 12px; height: 12px; border-radius: 4px; background: #16a34a;"></span>
+                    <span style="flex: 1; font-size: 13px; color: var(--text-muted);">Cash Payments</span>
+                    <strong style="font-size: 13px; fill: var(--text-primary);">₹${modeMap.cash.toFixed(2)} (${cashPercent.toFixed(0)}%)</strong>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function drawHourlySalesChart(invoices) {
+    // Hour buckets from 00 to 23
+    const hours = Array(24).fill(0);
+    invoices.forEach(inv => {
+        const hour = new Date(inv.created_at).getHours();
+        hours[hour] += 1;
+    });
+
+    // Find first and last hour with sales to crop empty timeline ends
+    let startHour = 8;
+    let endHour = 20;
+
+    for (let h = 0; h < 24; h++) {
+        if (hours[h] > 0) {
+            startHour = Math.min(startHour, h);
+            endHour = Math.max(endHour, h);
+        }
+    }
+    
+    // Add margin
+    startHour = Math.max(0, startHour - 1);
+    endHour = Math.min(23, endHour + 1);
+    const range = endHour - startHour + 1;
+
+    const svgWidth = 650;
+    const svgHeight = 220;
+    const paddingLeft = 40;
+    const paddingRight = 30;
+    const paddingTop = 30;
+    const paddingBottom = 40;
+
+    const chartWidth = svgWidth - paddingLeft - paddingRight;
+    const chartHeight = svgHeight - paddingTop - paddingBottom;
+
+    const activeHours = [];
+    for (let h = startHour; h <= endHour; h++) {
+        activeHours.push(h);
+    }
+
+    const maxCount = Math.max(...activeHours.map(h => hours[h]), 1);
+
+    // Build line coordinates
+    const points = [];
+    activeHours.forEach((hour, i) => {
+        const val = hours[hour];
+        const x = paddingLeft + (i / (range - 1)) * chartWidth;
+        const y = paddingTop + chartHeight - (val / maxCount) * chartHeight;
+        points.push({ x, y, hour, val });
+    });
+
+    let pathD = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length; i++) {
+        pathD += ` L ${points[i].x} ${points[i].y}`;
+    }
+    
+    // Create closed path for area gradient fill
+    const areaD = `${pathD} L ${points[points.length - 1].x} ${paddingTop + chartHeight} L ${points[0].x} ${paddingTop + chartHeight} Z`;
+
+    let markersHTML = '';
+    points.forEach(pt => {
+        const label = `${pt.hour.toString().padStart(2, '0')}:00`;
+        markersHTML += `
+            <circle cx="${pt.x}" cy="${pt.y}" r="4" fill="var(--color-primary)" stroke="#ffffff" stroke-width="1.5" />
+            ${pt.val > 0 ? `<text x="${pt.x}" y="${pt.y - 8}" text-anchor="middle" font-size="11" font-weight="bold" fill="var(--text-primary)">${pt.val}</text>` : ''}
+            <text x="${pt.x}" y="${paddingTop + chartHeight + 18}" text-anchor="middle" font-size="10" fill="var(--text-muted)">${label}</text>
+        `;
+    });
+
+    return `
+        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" width="100%" height="220" style="font-family: var(--font-body);">
+            <defs>
+                <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#2563eb" stop-opacity="0.3" />
+                    <stop offset="100%" stop-color="#2563eb" stop-opacity="0.0" />
+                </linearGradient>
+            </defs>
+            <!-- Y Gridlines -->
+            <line x1="${paddingLeft}" y1="${paddingTop}" x2="${svgWidth - paddingRight}" y2="${paddingTop}" stroke="var(--border-color)" stroke-dasharray="3,3" />
+            <line x1="${paddingLeft}" y1="${paddingTop + chartHeight / 2}" x2="${svgWidth - paddingRight}" y2="${paddingTop + chartHeight / 2}" stroke="var(--border-color)" stroke-dasharray="3,3" />
+            <line x1="${paddingLeft}" y1="${paddingTop + chartHeight}" x2="${svgWidth - paddingRight}" y2="${paddingTop + chartHeight}" stroke="var(--border-color)" />
+
+            <!-- Area Path with Gradient -->
+            <path d="${areaD}" fill="url(#areaGradient)">
+                <animate attributeName="opacity" from="0" to="1" dur="0.8s" />
+            </path>
+
+            <!-- Line Path -->
+            <path d="${pathD}" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <animate attributeName="stroke-dashoffset" from="1000" to="0" dur="1s" />
+            </path>
+
+            ${markersHTML}
+        </svg>
+    `;
+}
+
 

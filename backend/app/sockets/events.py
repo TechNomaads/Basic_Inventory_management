@@ -53,7 +53,7 @@ async def connect(sid: str, environ: dict) -> None:
 
     if location_id:
         # Join the location-specific room
-        sio.enter_room(sid, location_id)
+        await sio.enter_room(sid, location_id)
         await sio.save_session(sid, {"location_id": location_id})
 
     print(f"[Socket.IO] Client connected: {sid}, location: {location_id}")
@@ -92,8 +92,8 @@ async def join_location(sid: str, data: dict) -> None:
     session = await sio.get_session(sid)
     old_location = session.get("location_id") if session else None
     if old_location:
-        sio.leave_room(sid, old_location)
+        await sio.leave_room(sid, old_location)
 
     # Join new room
-    sio.enter_room(sid, location_id)
+    await sio.enter_room(sid, location_id)
     await sio.save_session(sid, {"location_id": location_id})

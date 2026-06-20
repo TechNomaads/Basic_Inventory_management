@@ -560,12 +560,39 @@ input:focus, select:focus, textarea:focus {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    padding: 24px;
+    padding: 24px 24px 34px 24px; /* extra bottom padding for hint */
     display: flex;
     flex-direction: column;
     gap: 12px;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), 
+                box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), 
+                border-color 0.2s ease;
+}
+.stat-card::after {
+    content: "View Details →";
+    position: absolute;
+    bottom: 8px;
+    right: 16px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-primary);
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity 0.2s var(--transition-fast), transform 0.2s var(--transition-fast);
+}
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.05);
+    border-color: var(--color-primary);
+}
+.stat-card:hover::after {
+    opacity: 1;
+    transform: translateX(0);
 }
 .stat-header {
     display: flex;
@@ -1287,6 +1314,52 @@ input:focus, select:focus, textarea:focus {
 }
 .row-highlight {
     animation: rowFlash 2s ease-out !important;
+}
+
+/* ── SPINNER & STATS DETAILS STYLING ── */
+.spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid var(--border-color);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 1s infinite linear;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.bg-danger-soft {
+    background-color: var(--color-danger-bg) !important;
+}
+.bg-warning-soft {
+    background-color: var(--color-warning-bg) !important;
+}
+.bg-success-soft {
+    background-color: var(--color-success-bg) !important;
+}
+
+/* ── CUSTOMER MANAGEMENT STYLING ── */
+.badge-paid {
+    background-color: rgba(22, 163, 74, 0.1) !important;
+    color: #16a34a !important;
+    border: 1px solid rgba(22, 163, 74, 0.2);
+    font-size: 11px;
+    font-weight: 600;
+}
+.badge-due {
+    background-color: rgba(239, 68, 68, 0.1) !important;
+    color: #ef4444 !important;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    font-size: 11px;
+    font-weight: 600;
+}
+.badge-partial {
+    background-color: rgba(245, 158, 11, 0.1) !important;
+    color: #f59e0b !important;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    font-size: 11px;
+    font-weight: 600;
 }
 
 

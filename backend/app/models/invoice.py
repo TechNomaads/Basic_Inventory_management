@@ -71,6 +71,7 @@ class InvoiceModel(Base):
     tax_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0.0)
     discount_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0.0)
     total_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0.0)
+    amount_paid: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0.00, server_default="0.00")
     payment_mode: Mapped[PaymentMode] = mapped_column(
         Enum(PaymentMode, name="payment_mode_enum", create_type=True),
         nullable=False,
@@ -109,6 +110,10 @@ class InvoiceModel(Base):
     @property
     def customer_phone(self) -> str | None:
         return self.customer.phone if self.customer else None
+
+    @property
+    def amount_due(self) -> float:
+        return float(self.total_amount or 0.0) - float(self.amount_paid or 0.0)
 
 
 class InvoiceItemModel(Base):

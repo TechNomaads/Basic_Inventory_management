@@ -22,6 +22,9 @@ async def create_tables():
 asyncio.run(create_tables())
 "
 
+echo "🔄 Running column migrations..."
+python -m app.core.alter_db
+
 echo "🌱 Seeding admin user (if not exists)..."
 python -m app.seed
 

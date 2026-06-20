@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import auth, audit, inventory, pending, products, reports, users, billing
+from app.routers import auth, audit, inventory, pending, products, reports, users, billing, customers
 from app.sockets.events import socket_app
 
 
@@ -54,10 +54,28 @@ def create_app() -> FastAPI:
     application.include_router(users.router)
     application.include_router(audit.router)
     application.include_router(billing.router)
+    application.include_router(customers.router)
 
 
     # ── Mount Socket.IO ──────────────────────────────────────────
-    application.mount("/ws", socket_app)
+    class SocketIOPathMiddleware:
+        """
+        Middleware to strip the '/ws' prefix from the scope path for Socket.IO.
+        This is necessary because newer Starlette/FastAPI versions do not mutate scope['path']
+        when routing requests to mounted applications.
+        """
+        def __init__(self, app):
+            self.app = app
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] in ("http", "websocket") and scope.get("path", "").startswith("/ws"):
+                scope = dict(scope)  # shallow copy
+                scope["path"] = scope["path"][3:]  # Strip '/ws'
+                if not scope["path"].startswith("/"):
+                    scope["path"] = "/" + scope["path"]
+            await self.app(scope, receive, send)
+
+    application.mount("/ws", SocketIOPathMiddleware(socket_app))
 
     # ── Health check ─────────────────────────────────────────────
     @application.get("/health", tags=["Health"])

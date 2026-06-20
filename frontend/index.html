@@ -109,6 +109,10 @@
                     <i data-lucide="receipt"></i>
                     <span>Sales History</span>
                 </button>
+                <button class="nav-item" data-tab="customers" id="nav-customers">
+                    <i data-lucide="users"></i>
+                    <span>Customers</span>
+                </button>
             </nav>
             
             <div class="sidebar-user">
@@ -142,35 +146,35 @@
             <!-- ── TAB CONTENT: DASHBOARD ── -->
             <section id="tab-dashboard" class="tab-panel">
                 <div class="stats-grid">
-                    <div class="stat-card">
+                    <div class="stat-card" id="card-total-products">
                         <div class="stat-header">
                             <span class="stat-title">Total Unique Products</span>
                             <i data-lucide="boxes" class="stat-icon text-primary"></i>
                         </div>
                         <div class="stat-value" id="stat-total-products">0</div>
                     </div>
-                    <div class="stat-card">
+                    <div class="stat-card" id="card-low-stock">
                         <div class="stat-header">
                             <span class="stat-title">Low Stock Alerts</span>
                             <i data-lucide="alert-triangle" class="stat-icon text-warning"></i>
                         </div>
                         <div class="stat-value" id="stat-low-stock">0</div>
                     </div>
-                    <div class="stat-card">
+                    <div class="stat-card" id="card-out-of-stock">
                         <div class="stat-header">
                             <span class="stat-title">Out of Stock Items</span>
                             <i data-lucide="x-circle" class="stat-icon text-danger"></i>
                         </div>
                         <div class="stat-value" id="stat-out-of-stock">0</div>
                     </div>
-                    <div class="stat-card">
+                    <div class="stat-card" id="card-todays-sales">
                         <div class="stat-header">
                             <span class="stat-title">Today's Sales Count</span>
                             <i data-lucide="shopping-cart" class="stat-icon text-accent" style="color: var(--color-secondary);"></i>
                         </div>
                         <div class="stat-value" id="stat-todays-sales">0</div>
                     </div>
-                    <div class="stat-card">
+                    <div class="stat-card" id="card-todays-revenue">
                         <div class="stat-header">
                             <span class="stat-title">Today's Revenue</span>
                             <i data-lucide="indian-rupee" class="stat-icon text-success" style="color: var(--color-success);"></i>
@@ -441,6 +445,21 @@
                                 </div>
                             </div>
 
+                            <div class="form-group hidden" id="pos-customer-credit-info" style="padding: 12px; border-radius: 6px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); margin-top: -5px; margin-bottom: 12px;">
+                                <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;">
+                                    <span style="color: var(--text-muted);">Current Overdue:</span>
+                                    <span id="pos-credit-overdue" style="font-weight: bold; color: var(--color-danger);">₹0.00</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px;">
+                                    <span style="color: var(--text-muted);">Credit Limit:</span>
+                                    <span id="pos-credit-limit" style="font-weight: bold; color: var(--text-primary);">₹0.00</span>
+                                </div>
+                                <div id="pos-credit-warning" class="text-xs text-danger hidden" style="margin-top: 8px; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                    <i data-lucide="alert-triangle" style="width: 14px; height: 14px;"></i>
+                                    <span>Purchase exceeds credit limit!</span>
+                                </div>
+                            </div>
+
                             <div class="form-group">
                                 <label for="pos-notes">Order Notes / Ref</label>
                                 <textarea id="pos-notes" rows="2" placeholder="Optional notes..."></textarea>
@@ -484,6 +503,14 @@
                                 <div class="summary-row total-row">
                                     <span>NET TOTAL:</span>
                                     <span id="pos-summary-total">₹0.00</span>
+                                </div>
+                                <div class="summary-row" style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color);">
+                                    <label for="pos-amount-paid" style="font-weight: 600; margin-bottom: 0;">AMOUNT PAID (₹):</label>
+                                    <input type="number" id="pos-amount-paid" step="0.01" min="0" value="0.00" style="width: 110px; text-align: right; font-weight: bold; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div id="pos-amount-due-row" class="summary-row text-xs text-muted" style="justify-content: flex-end; gap: 5px; margin-top: 4px; display: none;">
+                                    <span id="pos-amount-due-label">Remaining Balance:</span>
+                                    <span id="pos-amount-due-val" style="font-weight: bold;">₹0.00</span>
                                 </div>
                             </div>
 
@@ -547,6 +574,73 @@
                                 <tr><td colspan="11" class="text-center text-muted">Loading sales history...</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ── TAB CONTENT: CUSTOMERS ── -->
+            <section id="tab-customers" class="tab-panel hidden">
+                <div class="stats-grid" style="margin-bottom: 20px;">
+                    <div class="stat-card" style="cursor: default; transform: none; box-shadow: none;">
+                        <div class="stat-header">
+                            <span class="stat-title">Total Customers</span>
+                            <i data-lucide="users" class="stat-icon text-primary"></i>
+                        </div>
+                        <div class="stat-value" id="kpi-customers-count">0</div>
+                    </div>
+                    <div class="stat-card" style="cursor: default; transform: none; box-shadow: none;">
+                        <div class="stat-header">
+                            <span class="stat-title">Outstanding Debt</span>
+                            <i data-lucide="alert-circle" class="stat-icon text-danger"></i>
+                        </div>
+                        <div class="stat-value" id="kpi-customers-overdue" style="color: var(--color-danger);">₹0.00</div>
+                    </div>
+                    <div class="stat-card" style="cursor: default; transform: none; box-shadow: none;">
+                        <div class="stat-header">
+                            <span class="stat-title">Total Credit Limit</span>
+                            <i data-lucide="shield-check" class="stat-icon text-success"></i>
+                        </div>
+                        <div class="stat-value" id="kpi-customers-credit" style="color: var(--color-success);">₹0.00</div>
+                    </div>
+                </div>
+
+                <div class="table-actions">
+                    <div class="search-filters" style="flex: 1;">
+                        <div class="search-box" style="max-width: 320px;">
+                            <i data-lucide="search" class="search-icon"></i>
+                            <input type="text" id="customers-search" placeholder="Search by name or phone...">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" id="btn-add-customer">
+                        <i data-lucide="user-plus"></i>
+                        <span>Add Customer</span>
+                    </button>
+                </div>
+
+                <div class="card card-table">
+                    <div class="table-wrapper">
+                        <table class="table" id="customers-table">
+                            <thead>
+                                <tr>
+                                    <th>Customer Name</th>
+                                    <th>Phone Number</th>
+                                    <th>Credit Limit (₹)</th>
+                                    <th>Overdue Balance (₹)</th>
+                                    <th>Created Date</th>
+                                    <th class="text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="6" class="text-center text-muted">Loading customer records...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="table-pagination">
+                        <span class="pagination-info" id="customers-pagination-info">Showing 0-0 of 0</span>
+                        <div class="pagination-buttons">
+                            <button class="btn btn-ghost btn-sm" id="btn-customers-prev" disabled><i data-lucide="chevron-left"></i></button>
+                            <button class="btn btn-ghost btn-sm" id="btn-customers-next" disabled><i data-lucide="chevron-right"></i></button>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -817,6 +911,14 @@
                         <span>Net Total:</span>
                         <span id="inv-detail-total">₹0.00</span>
                     </div>
+                    <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px;">
+                        <span>Amount Paid:</span>
+                        <span id="inv-detail-paid" style="color: var(--color-success); font-weight: 500;">₹0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; margin-bottom: 6px;">
+                        <span>Amount Due:</span>
+                        <span id="inv-detail-due" style="color: var(--color-danger); font-weight: 500;">₹0.00</span>
+                    </div>
                 </div>
             </div>
 
@@ -851,6 +953,167 @@
             </div>
             <div class="modal-footer" style="padding: 15px;">
                 <button type="button" class="btn btn-ghost btn-block" id="btn-stop-scanner">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 🛠️ METRIC DETAIL MODAL (INTERACTIVE DASHBOARD) ── -->
+    <div id="metric-detail-modal" class="modal-overlay hidden">
+        <div class="modal-card modal-lg" style="max-width: 950px; width: 90%; display: flex; flex-direction: column; max-height: 85vh;">
+            <div class="modal-header">
+                <h3 id="metric-detail-title">Metric Details</h3>
+                <button class="modal-close" data-close-modal="metric-detail-modal"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 20px; padding: 20px; overflow-y: auto; flex: 1;">
+                <!-- Summary Stats Info Panel -->
+                <div id="metric-summary-container" style="display: flex; gap: 15px; flex-wrap: wrap; flex-shrink: 0;">
+                    <!-- Dynamically generated KPI cards -->
+                </div>
+                
+                <!-- Chart Area -->
+                <div class="card" style="padding: 20px; border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--bg-card); display: flex; flex-direction: column; gap: 15px; flex-shrink: 0;">
+                    <h4 id="metric-chart-title" style="font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px;">
+                        <i data-lucide="bar-chart-3" style="width: 18px; height: 18px; color: var(--color-primary);"></i>
+                        Visual Breakdown
+                    </h4>
+                    <div id="metric-chart-container" style="min-height: 260px; display: flex; justify-content: center; align-items: center; position: relative; width: 100%;">
+                        <!-- Dynamically generated SVG charts -->
+                    </div>
+                </div>
+
+                <!-- Details Table Area -->
+                <div class="card card-table" style="border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--bg-card); flex-shrink: 0;">
+                    <div class="card-header" style="padding: 15px; border-bottom: 1px solid var(--border-color);">
+                        <h4 style="margin: 0; font-weight: 600;">Detailed List</h4>
+                    </div>
+                    <div class="table-wrapper" style="max-height: 300px; overflow-y: auto;">
+                        <table class="table" id="metric-detail-table">
+                            <thead>
+                                <tr id="metric-detail-table-header">
+                                    <!-- Dynamically generated headers -->
+                                </tr>
+                            </thead>
+                            <tbody id="metric-detail-table-body">
+                                <!-- Dynamically generated rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 15px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-ghost" data-close-modal="metric-detail-modal">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 🛠️ CUSTOMER MODAL (ADD / EDIT) ── -->
+    <div id="customer-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3 id="customer-modal-title">Add Customer</h3>
+                <button class="modal-close" data-close-modal="customer-modal"><i data-lucide="x"></i></button>
+            </div>
+            <form id="customer-form">
+                <input type="hidden" id="customer-id">
+                <div class="modal-body" style="display: flex; flex-direction: column; gap: 15px; padding: 20px;">
+                    <div class="form-group">
+                        <label for="customer-name">Customer Name *</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="user" class="input-icon"></i>
+                            <input type="text" id="customer-name" required placeholder="e.g. John Doe">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="customer-phone">Phone Number</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="phone" class="input-icon"></i>
+                            <input type="tel" id="customer-phone" placeholder="e.g. 9876543210">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="customer-credit-limit">Credit Limit (₹)</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="shield" class="input-icon"></i>
+                            <input type="number" id="customer-credit-limit" step="0.01" min="0" value="10000.00" placeholder="10000.00">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customer-overdue">Initial Overdue Balance (₹)</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="indian-rupee" class="input-icon"></i>
+                            <input type="number" id="customer-overdue" step="0.01" value="0.00" placeholder="0.00">
+                        </div>
+                    </div>
+
+                    <div id="customer-error" class="error-msg hidden">
+                        <i data-lucide="alert-circle"></i>
+                        <span id="customer-error-text">An error occurred</span>
+                    </div>
+                </div>
+                <div class="modal-footer" style="padding: 15px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" class="btn btn-ghost" data-close-modal="customer-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Customer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── 🛠️ CUSTOMER HISTORY MODAL ── -->
+    <div id="customer-history-modal" class="modal-overlay hidden">
+        <div class="modal-card modal-lg" style="max-width: 950px; width: 90%; display: flex; flex-direction: column; max-height: 85vh;">
+            <div class="modal-header">
+                <h3 id="customer-history-title">Customer Details & Invoice History</h3>
+                <button class="modal-close" data-close-modal="customer-history-modal"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 20px; padding: 20px; overflow-y: auto; flex: 1;">
+                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                    <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                        <div class="text-hint text-xs font-semibold">CUSTOMER PHONE</div>
+                        <div id="hist-customer-phone" class="text-primary text-xl font-bold" style="padding-top: 4px; font-family: var(--font-display);">N/A</div>
+                    </div>
+                    <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                        <div class="text-hint text-xs font-semibold">CREDIT LIMIT</div>
+                        <div id="hist-customer-limit" class="text-success text-xl font-bold" style="padding-top: 4px; font-family: var(--font-display);">₹0.00</div>
+                    </div>
+                    <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                        <div class="text-hint text-xs font-semibold">OVERDUE BALANCE</div>
+                        <div id="hist-customer-overdue" class="text-danger text-xl font-bold" style="padding-top: 4px; font-family: var(--font-display);">₹0.00</div>
+                    </div>
+                </div>
+
+                <div class="card card-table" style="border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--bg-card); flex-shrink: 0;">
+                    <div class="card-header" style="padding: 15px; border-bottom: 1px solid var(--border-color);">
+                        <h4 style="margin: 0; font-weight: 600;">Purchase Invoice History</h4>
+                    </div>
+                    <div class="table-wrapper" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table" id="customer-history-table">
+                            <thead>
+                                <tr>
+                                    <th>Invoice No</th>
+                                    <th>Date</th>
+                                    <th>Location</th>
+                                    <th>Subtotal (₹)</th>
+                                    <th>Tax (₹)</th>
+                                    <th>Discount (₹)</th>
+                                    <th>Total (₹)</th>
+                                    <th>Paid (₹)</th>
+                                    <th>Due (₹)</th>
+                                    <th>Status</th>
+                                    <th class="text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="customer-history-table-body">
+                                <tr><td colspan="11" class="text-center text-muted">No invoices found for this customer.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 15px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-ghost" data-close-modal="customer-history-modal">Close</button>
             </div>
         </div>
     </div>

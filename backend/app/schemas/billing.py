@@ -20,6 +20,8 @@ class CustomerLookupResponse(BaseModel):
     id: UUID
     name: str
     phone: str | None = None
+    credit_limit: float
+    overdue_amount: float
 
     class Config:
         from_attributes = True
@@ -43,6 +45,7 @@ class CheckoutRequest(BaseModel):
     location_id: UUID
     payment_mode: PaymentMode = Field(default=PaymentMode.cash)
     discount_amount: float = Field(default=0.0, ge=0.0, description="Bill-level discount")
+    amount_paid: float | None = Field(default=None, ge=0.0)
     notes: str | None = Field(default=None, max_length=500)
     customer_name: str | None = Field(default=None, max_length=150)
     customer_phone: str | None = Field(default=None, max_length=50)
@@ -86,6 +89,8 @@ class InvoiceResponse(BaseModel):
     tax_amount: float
     discount_amount: float
     total_amount: float
+    amount_paid: float
+    amount_due: float
     payment_mode: PaymentMode
     notes: str | None = None
     created_at: datetime
@@ -106,6 +111,8 @@ class InvoiceSummaryItem(BaseModel):
     tax_amount: float
     discount_amount: float
     total_amount: float
+    amount_paid: float
+    amount_due: float
     payment_mode: PaymentMode
     created_at: datetime
 

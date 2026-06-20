@@ -13,7 +13,7 @@ Dependencies:
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Index, String, text
+from sqlalchemy import DateTime, Index, String, text, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -40,6 +40,12 @@ class CustomerModel(Base):
         String(150), nullable=False, default="Anonymous/Walk-in", server_default="Anonymous/Walk-in"
     )
     phone: Mapped[str | None] = mapped_column(String(50), unique=True, nullable=True)
+    credit_limit: Mapped[float] = mapped_column(
+        Numeric(12, 2), nullable=False, default=10000.00, server_default="10000.00"
+    )
+    overdue_amount: Mapped[float] = mapped_column(
+        Numeric(12, 2), nullable=False, default=0.00, server_default="0.00"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
