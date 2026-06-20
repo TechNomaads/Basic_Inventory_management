@@ -108,3 +108,57 @@ async def test_search_products(client: AsyncClient, admin_user):
     data = response.json()
     assert data["total"] == 3
     assert len(data["items"]) == 3
+
+
+@pytest.mark.asyncio
+async def test_create_product_initializes_inventory(client: AsyncClient, admin_user, db_session):
+    """Creating a product automatically initializes inventory records at all locations."""
+    headers = auth_headers(admin_user)
+
+    # Create a test location first
+    from app.models.location import LocationModel
+    import uuid
+    location = LocationModel(
+        id=uuid.uuid4(),
+        name="Warehouse A",
+        code="WH-A",
+        type="warehouse",
+    )
+    db_session.add(location)
+    await db_session.commit()
+
+    # 1. Fetch available locations first
+    loc_response = await client.get("/api/v1/inventory/meta/locations", headers=headers)
+    assert loc_response.status_code == 200
+    locations = loc_response.json()
+    assert len(locations) > 0
+
+    # 2. Create the product
+    barcode = "INV-INIT-001"
+    response = await client.post(
+        "/api/v1/products",
+        json={
+            "barcode": barcode,
+            "name": "Auto Inventory Init Product",
+            "sku": "AIIP-001",
+            "unit": "pcs",
+        },
+        headers=headers,
+    )
+    assert response.status_code == 201
+    product_id = response.json()["id"]
+
+    # 3. Verify that the product is now listed in the inventory for all locations with quantity 0
+    for loc in locations:
+        inv_response = await client.get(f"/api/v1/inventory/{loc['id']}", headers=headers)
+        assert inv_response.status_code == 200
+        inv_items = inv_response.json()
+
+        # Find our product
+        matching = [i for i in inv_items if i["product_id"] == product_id]
+        assert len(matching) == 1
+        assert matching[0]["quantity"] == 0
+        assert matching[0]["product_name"] == "Auto Inventory Init Product"
+        assert matching[0]["product_barcode"] == barcode
+
+

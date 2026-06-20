@@ -53,6 +53,27 @@ async def create_product(
     product = ProductModel(**data.model_dump())
     product = await product_repo.create(db, product)
 
+    # Automatically initialize inventory records at all locations
+    from app.models.location import LocationModel
+    from app.models.inventory import InventoryModel
+    from sqlalchemy import select
+
+    loc_stmt = select(LocationModel)
+    loc_result = await db.execute(loc_stmt)
+    locations = loc_result.scalars().all()
+
+    for loc in locations:
+        inv = InventoryModel(
+            product_id=product.id,
+            location_id=loc.id,
+            quantity=0,
+            min_quantity=0,
+            max_quantity=None,
+            version=0,
+        )
+        db.add(inv)
+    await db.flush()
+
     # Audit log
     await write_audit_log(
         db=db,
