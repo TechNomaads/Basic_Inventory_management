@@ -1227,4 +1227,66 @@ input:focus, select:focus, textarea:focus {
     font-family: var(--font-display);
 }
 
+/* ── BARCODE SCANNER INTEGRATION STYLES ── */
+.scan-trigger-btn {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-primary);
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 6px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-fast);
+    z-index: 5;
+}
+.scan-trigger-btn:hover {
+    background: var(--color-primary-glow);
+    color: var(--color-primary-dark);
+}
+
+/* Shift search clear button when scan button is present */
+.pos-search-container .search-clear {
+    right: 48px !important;
+}
+
+/* Scanner Modal Specific Customization */
+.scanner-viewport-wrapper #scanner-preview video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+}
+
+/* Laser animation keyframes */
+@keyframes scanline {
+    0% {
+        top: 4%;
+    }
+    50% {
+        top: 96%;
+    }
+    100% {
+        top: 4%;
+    }
+}
+
+@keyframes rowFlash {
+    0% {
+        background-color: var(--color-primary-glow);
+    }
+    100% {
+        background-color: transparent;
+    }
+}
+.row-highlight {
+    animation: rowFlash 2s ease-out !important;
+}
+
+
+
 

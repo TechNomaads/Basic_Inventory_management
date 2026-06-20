@@ -168,6 +168,69 @@ function bindEvents() {
             results.classList.add('hidden');
         }
     });
+
+    // Barcode Scanner Modal buttons bindings
+    const posScanBtn = document.getElementById('pos-scan-btn');
+    if (posScanBtn) {
+        posScanBtn.addEventListener('click', () => {
+            ScannerService.startCameraScanner((barcode) => {
+                handleBarcodeScanned(barcode, 'pos');
+            });
+        });
+    }
+    const inventoryScanBtn = document.getElementById('inventory-scan-btn');
+    if (inventoryScanBtn) {
+        inventoryScanBtn.addEventListener('click', () => {
+            ScannerService.startCameraScanner((barcode) => {
+                handleBarcodeScanned(barcode, 'inventory');
+            });
+        });
+    }
+    const productScanBtn = document.getElementById('product-scan-btn');
+    if (productScanBtn) {
+        productScanBtn.addEventListener('click', () => {
+            ScannerService.startCameraScanner((barcode) => {
+                handleBarcodeScanned(barcode, 'products');
+            });
+        });
+    }
+    const txScanBtn = document.getElementById('tx-scan-btn');
+    if (txScanBtn) {
+        txScanBtn.addEventListener('click', () => {
+            ScannerService.startCameraScanner((barcode) => {
+                handleBarcodeScanned(barcode, 'tx');
+            });
+        });
+    }
+    const adjScanBtn = document.getElementById('adj-scan-btn');
+    if (adjScanBtn) {
+        adjScanBtn.addEventListener('click', () => {
+            ScannerService.startCameraScanner((barcode) => {
+                handleBarcodeScanned(barcode, 'adj');
+            });
+        });
+    }
+    const btnStopScanner = document.getElementById('btn-stop-scanner');
+    if (btnStopScanner) {
+        btnStopScanner.addEventListener('click', () => ScannerService.stopCameraScanner());
+    }
+    const btnCloseScanner = document.getElementById('btn-close-scanner');
+    if (btnCloseScanner) {
+        btnCloseScanner.addEventListener('click', () => ScannerService.stopCameraScanner());
+    }
+    const cameraSelect = document.getElementById('scanner-camera-select');
+    if (cameraSelect) {
+        cameraSelect.addEventListener('change', (e) => {
+            if (e.target.value) {
+                ScannerService.switchCamera(e.target.value);
+            }
+        });
+    }
+
+    // Initialize global hardware/keyboard scanner emulation
+    ScannerService.initHardwareScanner((barcode) => {
+        handleBarcodeScanned(barcode, 'global');
+    });
 }
 
 // ── AUTHENTICATION CONTROLLERS ──
@@ -519,6 +582,7 @@ async function loadInventoryData() {
 
     try {
         const items = await fetchWithAuth(`${API_URL}/api/v1/inventory/${state.selectedLocationId}`);
+        state.posInventory = items; // Cache inventory items for barcode scanning
         
         if (items.length === 0) {
             tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No inventory records found for this location.</td></tr>';
@@ -1576,3 +1640,252 @@ window.addPosCartItem = addPosCartItem;
 window.updateCartItemField = updateCartItemField;
 window.removePosCartItem = removePosCartItem;
 window.adjustCartQty = adjustCartQty;
+
+// ── BARCODE SCANNER CONTROLLER & SERVICE ──
+const ScannerService = {
+    cameraScanner: null,
+    activeCameraId: null,
+    scanCallback: null,
+    
+    // Hardware Keyboard Scanner Emulation State
+    buffer: '',
+    lastCharTime: 0,
+
+    initHardwareScanner(callback) {
+        window.addEventListener('keydown', (e) => {
+            const currentTime = Date.now();
+            
+            // Ignore modifiers
+            if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') {
+                return;
+            }
+
+            // If time since last character is long, reset buffer (implies normal human typing, not a scanner)
+            if (this.lastCharTime && (currentTime - this.lastCharTime > 150)) {
+                this.buffer = '';
+            }
+            
+            this.lastCharTime = currentTime;
+
+            if (e.key === 'Enter') {
+                // If we have a reasonable barcode length (e.g. 5+ characters)
+                if (this.buffer.length >= 5) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const barcode = this.buffer;
+                    this.buffer = '';
+                    callback(barcode);
+                } else {
+                    this.buffer = '';
+                }
+            } else if (e.key.length === 1) {
+                // Append typed character
+                this.buffer += e.key;
+            }
+        }, true); // Use capture phase to catch scans before active textboxes handle them
+    },
+
+    async startCameraScanner(callback) {
+        this.scanCallback = callback;
+        const modal = document.getElementById('scanner-modal');
+        modal.classList.remove('hidden');
+
+        const cameraSelect = document.getElementById('scanner-camera-select');
+        cameraSelect.innerHTML = '<option value="">Detecting cameras...</option>';
+
+        try {
+            // Get available cameras
+            const devices = await Html5Qrcode.getCameras();
+            if (!devices || devices.length === 0) {
+                cameraSelect.innerHTML = '<option value="">No cameras detected</option>';
+                return;
+            }
+
+            cameraSelect.innerHTML = devices.map(d => `<option value="${d.id}">${escapeHtml(d.label || `Camera ${d.id.substring(0,6)}`)}</option>`).join('');
+            this.activeCameraId = devices[0].id;
+            cameraSelect.value = this.activeCameraId;
+
+            this.cameraScanner = new Html5Qrcode("scanner-preview");
+            await this.startScanning();
+        } catch (err) {
+            console.error('Error starting camera scanner:', err);
+            cameraSelect.innerHTML = `<option value="">Access Error: ${escapeHtml(err.message)}</option>`;
+        }
+    },
+
+    async startScanning() {
+        if (!this.cameraScanner || !this.activeCameraId) return;
+
+        try {
+            await this.cameraScanner.start(
+                this.activeCameraId,
+                {
+                    fps: 15,
+                    qrbox: (width, height) => {
+                        // Wide horizontal scanning area for standard retail barcodes
+                        return { width: Math.round(width * 0.75), height: Math.round(height * 0.4) };
+                    }
+                },
+                (barcodeText) => {
+                    // Success
+                    this.stopCameraScanner();
+                    if (this.scanCallback) {
+                        this.scanCallback(barcodeText);
+                    }
+                },
+                (errorMessage) => {
+                    // Verbose error from scan attempts, safe to ignore
+                }
+            );
+        } catch (err) {
+            console.error('Failed to start scanning on selected camera:', err);
+        }
+    },
+
+    async switchCamera(cameraId) {
+        if (this.cameraScanner) {
+            try {
+                await this.cameraScanner.stop();
+            } catch (e) {
+                // Ignore stop errors
+            }
+            this.activeCameraId = cameraId;
+            await this.startScanning();
+        }
+    },
+
+    async stopCameraScanner() {
+        const modal = document.getElementById('scanner-modal');
+        modal.classList.add('hidden');
+
+        if (this.cameraScanner) {
+            try {
+                await this.cameraScanner.stop();
+            } catch (err) {
+                // Ignore stop errors
+            }
+            this.cameraScanner = null;
+        }
+        this.scanCallback = null;
+    }
+};
+
+function playScanBeep() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(950, ctx.currentTime);
+        
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+        
+        osc.start();
+        osc.stop(ctx.currentTime + 0.12);
+    } catch (e) {
+        console.error('Browser audio beep failed:', e);
+    }
+}
+
+function handleBarcodeScanned(barcode, source) {
+    playScanBeep();
+    
+    // Determine context (tab name)
+    let context = source === 'global' ? state.activeTab : source;
+
+    // Overwrite context if global scan happens while a modal is open on the inventory page
+    if (context === 'inventory' && source === 'global') {
+        const txModal = document.getElementById('tx-modal');
+        const adjModal = document.getElementById('adjustment-modal');
+        if (txModal && !txModal.classList.contains('hidden')) {
+            context = 'tx';
+        } else if (adjModal && !adjModal.classList.contains('hidden')) {
+            context = 'adj';
+        }
+    }
+
+    if (context === 'billing' || context === 'pos') {
+        // Find product in in-memory location stock matching barcode
+        const invItem = state.posInventory.find(item => item.product_barcode === barcode);
+        if (invItem) {
+            // Add to POS cart
+            addPosCartItem(invItem.product_id);
+            // Flash search box green to show scan feedback
+            flashSearchBorder('pos-product-search', 'success');
+        } else {
+            flashSearchBorder('pos-product-search', 'error');
+            alert(`Product with barcode ${barcode} is not in stock or not registered at this location.`);
+        }
+    } else if (context === 'products') {
+        const searchInput = document.getElementById('product-search');
+        if (searchInput) {
+            searchInput.value = barcode;
+            filterProducts();
+            flashSearchBorder('product-search', 'success');
+        }
+    } else if (context === 'inventory') {
+        // Find product in inventory list
+        const invItem = state.posInventory.find(item => item.product_barcode === barcode);
+        if (invItem) {
+            // Scroll to the inventory row and highlight it
+            const row = document.getElementById(`inv-row-${invItem.product_id}`);
+            if (row) {
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                row.classList.add('row-highlight');
+                setTimeout(() => row.classList.remove('row-highlight'), 2000);
+            }
+            // Auto open the In/Out transaction modal
+            openTxModal(invItem.product_id, invItem.product_name, invItem.quantity, invItem.version);
+        } else {
+            alert(`No inventory record for barcode ${barcode} found at this location.`);
+        }
+    } else if (context === 'tx') {
+        const invItem = state.posInventory.find(item => item.product_barcode === barcode);
+        if (invItem) {
+            document.getElementById('tx-product-id').value = invItem.product_id;
+            document.getElementById('tx-known-version').value = invItem.version;
+            document.getElementById('tx-prod-name-display').textContent = invItem.product_name;
+            document.getElementById('tx-prod-qty-display').textContent = invItem.quantity;
+            flashSearchBorder('tx-summary-panel', 'success');
+        } else {
+            alert(`No inventory record for barcode ${barcode} found at this location.`);
+        }
+    } else if (context === 'adj') {
+        const invItem = state.posInventory.find(item => item.product_barcode === barcode);
+        if (invItem) {
+            document.getElementById('adj-product-id').value = invItem.product_id;
+            document.getElementById('adj-known-version').value = invItem.version;
+            document.getElementById('adj-prod-name-display').textContent = invItem.product_name;
+            document.getElementById('adj-prod-qty-display').textContent = invItem.quantity;
+            flashSearchBorder('adj-summary-panel', 'success');
+        } else {
+            alert(`No inventory record for barcode ${barcode} found at this location.`);
+        }
+    }
+}
+
+function flashSearchBorder(id, status) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const originalBorderColor = el.style.borderColor;
+    const originalBoxShadow = el.style.boxShadow;
+
+    if (status === 'success') {
+        el.style.borderColor = 'var(--color-success)';
+        el.style.boxShadow = '0 0 0 3px rgba(34, 197, 94, 0.2)';
+    } else {
+        el.style.borderColor = 'var(--color-danger)';
+        el.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.2)';
+    }
+
+    setTimeout(() => {
+        el.style.borderColor = originalBorderColor;
+        el.style.boxShadow = originalBoxShadow;
+    }, 1000);
+}
+

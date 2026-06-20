@@ -12,6 +12,8 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Socket.IO Client -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <!-- HTML5-QRCode Scanner Library -->
+    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode/html5-qrcode.min.js"></script>
     <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
@@ -211,9 +213,12 @@
             <section id="tab-products" class="tab-panel hidden">
                 <div class="table-actions">
                     <div class="search-filters">
-                        <div class="input-wrapper search-box">
+                        <div class="input-wrapper search-box" style="position: relative;">
                             <i data-lucide="search" class="input-icon"></i>
-                            <input type="text" id="product-search" placeholder="Search by name, SKU, or barcode...">
+                            <input type="text" id="product-search" placeholder="Search by name, SKU, or barcode..." style="padding-right: 40px;">
+                            <button class="btn btn-ghost scan-trigger-btn" id="product-scan-btn" title="Scan Barcode via Camera" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; padding: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                                <i data-lucide="scan-line" style="width: 18px; height: 18px; color: var(--color-primary);"></i>
+                            </button>
                         </div>
                         <select id="product-category-filter">
                             <option value="">All Categories</option>
@@ -264,6 +269,10 @@
                                 <!-- Locations will load here -->
                             </select>
                         </div>
+                        <button class="btn btn-ghost btn-icon-only scan-trigger-btn" id="inventory-scan-btn" title="Scan Barcode via Camera" style="align-self: flex-end; margin-bottom: 2px; padding: 10px; height: 42px;">
+                            <i data-lucide="scan-line"></i>
+                            <span>Scan Barcode</span>
+                        </button>
                     </div>
                     <button class="btn btn-ghost" id="refresh-inventory-btn">
                         <i data-lucide="refresh-cw"></i> Reload Stock
@@ -371,6 +380,9 @@
                                 <input type="text" id="pos-product-search" placeholder="Search product by name, SKU, barcode..." autocomplete="off">
                                 <button class="btn btn-ghost search-clear hidden" id="pos-search-clear">
                                     <i data-lucide="x"></i>
+                                </button>
+                                <button class="btn btn-ghost scan-trigger-btn" id="pos-scan-btn" title="Scan Barcode via Camera">
+                                    <i data-lucide="scan-line"></i>
                                 </button>
                             </div>
                             <div id="pos-search-results" class="autocomplete-dropdown hidden">
@@ -618,16 +630,19 @@
     <!-- ── 🛠️ TRANSACTION MODAL (STOCK IN / OUT) ── -->
     <div id="tx-modal" class="modal-overlay hidden">
         <div class="modal-card modal-sm">
-            <div class="modal-header">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <h3>Record Stock Transaction</h3>
-                <button class="modal-close" data-close-modal="tx-modal"><i data-lucide="x"></i></button>
+                <button type="button" class="btn btn-sm btn-ghost" id="tx-scan-btn" title="Scan Product via Camera" style="margin-left: auto; margin-right: 10px; display: flex; align-items: center; gap: 4px; padding: 4px 8px; height: auto; border: 1px solid var(--border-color);">
+                    <i data-lucide="scan-line" style="width: 16px; height: 16px;"></i> Scan
+                </button>
+                <button type="button" class="modal-close" data-close-modal="tx-modal"><i data-lucide="x"></i></button>
             </div>
             <form id="tx-form">
                 <input type="hidden" id="tx-product-id">
                 <input type="hidden" id="tx-location-id">
                 <input type="hidden" id="tx-known-version">
 
-                <div class="modal-summary-panel">
+                <div class="modal-summary-panel" id="tx-summary-panel">
                     <div class="summary-row">
                         <span class="label">Product:</span>
                         <span class="value" id="tx-prod-name-display">Loading...</span>
@@ -681,16 +696,19 @@
     <!-- ── 🛠️ ADJUSTMENT MODAL ── -->
     <div id="adjustment-modal" class="modal-overlay hidden">
         <div class="modal-card modal-sm">
-            <div class="modal-header">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <h3>Request Stock Adjustment</h3>
-                <button class="modal-close" data-close-modal="adjustment-modal"><i data-lucide="x"></i></button>
+                <button type="button" class="btn btn-sm btn-ghost" id="adj-scan-btn" title="Scan Product via Camera" style="margin-left: auto; margin-right: 10px; display: flex; align-items: center; gap: 4px; padding: 4px 8px; height: auto; border: 1px solid var(--border-color);">
+                    <i data-lucide="scan-line" style="width: 16px; height: 16px;"></i> Scan
+                </button>
+                <button type="button" class="modal-close" data-close-modal="adjustment-modal"><i data-lucide="x"></i></button>
             </div>
             <form id="adjustment-form">
                 <input type="hidden" id="adj-product-id">
                 <input type="hidden" id="adj-location-id">
                 <input type="hidden" id="adj-known-version">
 
-                <div class="modal-summary-panel">
+                <div class="modal-summary-panel" id="adj-summary-panel">
                     <div class="summary-row">
                         <span class="label">Product:</span>
                         <span class="value" id="adj-prod-name-display">Loading...</span>
@@ -807,6 +825,32 @@
                 <button type="button" class="btn btn-primary" id="btn-print-receipt">
                     <i data-lucide="printer"></i> Print Receipt
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── BARCODE SCANNER MODAL ── -->
+    <div id="scanner-modal" class="modal hidden">
+        <div class="modal-content scanner-modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3>Barcode Camera Scanner</h3>
+                <button class="close-btn" id="btn-close-scanner">&times;</button>
+            </div>
+            <div class="scanner-body" style="padding: 15px 0;">
+                <div class="form-group" style="margin-bottom: 12px; padding: 0 15px;">
+                    <label for="scanner-camera-select" class="field-label">Select Camera</label>
+                    <select id="scanner-camera-select" class="select-large">
+                        <option value="">Detecting cameras...</option>
+                    </select>
+                </div>
+                <div class="scanner-viewport-wrapper" style="position: relative; overflow: hidden; background: #000; border-radius: var(--radius-md); border: 2px solid var(--border-color); aspect-ratio: 4/3; margin: 0 15px 12px 15px;">
+                    <div id="scanner-preview" style="width: 100%; height: 100%;"></div>
+                    <div class="scanner-laser" style="position: absolute; left: 0; right: 0; height: 3px; background: rgba(239, 68, 68, 0.85); box-shadow: 0 0 10px #ef4444; z-index: 10; pointer-events: none; animation: scanline 2.5s infinite linear;"></div>
+                </div>
+                <p class="scanner-hint text-muted text-center" style="font-size: 13px; margin: 0 15px;">Position the barcode inside the camera view frame.</p>
+            </div>
+            <div class="modal-footer" style="padding: 15px;">
+                <button type="button" class="btn btn-ghost btn-block" id="btn-stop-scanner">Cancel</button>
             </div>
         </div>
     </div>
