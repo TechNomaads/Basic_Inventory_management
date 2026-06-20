@@ -538,7 +538,7 @@ async function loadProductsData() {
                 <td>${p.sell_price.toFixed(2)}</td>
                 ${canManage ? `
                     <td class="text-right">
-                        <button class="action-btn action-btn-primary" onclick="openProductModal('${p.id}')" title="Edit">
+                        <button class="action-btn action-btn-primary" onclick="openProductModal('${p.barcode}')" title="Edit">
                             <i data-lucide="edit-2"></i>
                         </button>
                         ${isAdmin ? `
