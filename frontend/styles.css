@@ -1033,6 +1033,8 @@ input:focus, select:focus, textarea:focus {
 .pos-search-container {
     position: relative;
     padding: 12px;
+    overflow: visible !important;
+    z-index: 100;
 }
 
 .search-clear {
