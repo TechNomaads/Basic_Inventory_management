@@ -90,6 +90,10 @@
                     <i data-lucide="warehouse"></i>
                     <span>Inventory</span>
                 </button>
+                <button class="nav-item" data-tab="billing" id="nav-billing">
+                    <i data-lucide="shopping-cart"></i>
+                    <span>Billing (POS)</span>
+                </button>
                 <button class="nav-item" data-tab="pending" id="nav-pending">
                     <i data-lucide="clock"></i>
                     <span>Pending Approvals</span>
@@ -340,6 +344,151 @@
             </section>
 
             <!-- ── TAB CONTENT: SALES HISTORY ── -->
+            <!-- ── TAB CONTENT: BILLING (POS) ── -->
+            <section id="tab-billing" class="tab-panel hidden">
+                <div class="pos-layout">
+                    <!-- Left: Search & Cart -->
+                    <div class="pos-main">
+                        <div class="pos-header-panel card">
+                            <div class="pos-meta-grid">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label for="pos-location-select" class="field-label">Active Location *</label>
+                                    <select id="pos-location-select" class="select-large">
+                                        <!-- Locations populated dynamically -->
+                                    </select>
+                                </div>
+                                <div class="cashier-info">
+                                    <span class="label">Cashier:</span>
+                                    <span class="value" id="pos-cashier-name">Admin User</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Product Search with Autocomplete Dropdown -->
+                        <div class="pos-search-container card">
+                            <div class="input-wrapper">
+                                <i data-lucide="search" class="input-icon"></i>
+                                <input type="text" id="pos-product-search" placeholder="Search product by name, SKU, barcode..." autocomplete="off">
+                                <button class="btn btn-ghost search-clear hidden" id="pos-search-clear">
+                                    <i data-lucide="x"></i>
+                                </button>
+                            </div>
+                            <div id="pos-search-results" class="autocomplete-dropdown hidden">
+                                <!-- Results populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Cart Table Card -->
+                        <div class="card card-table pos-cart-card">
+                            <div class="table-wrapper">
+                                <table class="table" id="pos-cart-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Product Details</th>
+                                            <th style="width: 110px;">Qty</th>
+                                            <th style="width: 100px;">Original (₹)</th>
+                                            <th style="width: 110px;">Custom (₹)</th>
+                                            <th style="width: 90px;">Tax %</th>
+                                            <th style="width: 110px;">Discount (₹)</th>
+                                            <th style="width: 120px;" class="text-right">Total (₹)</th>
+                                            <th style="width: 50px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="pos-cart-body">
+                                        <tr>
+                                            <td colspan="8" class="text-center text-muted pos-empty-cart">
+                                                <i data-lucide="shopping-cart" style="width: 32px; height: 32px; margin: 12px auto; display: block; opacity: 0.5;"></i>
+                                                Cart is empty. Search products above to add items.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Checkout Sidebar -->
+                    <aside class="pos-sidebar">
+                        <div class="card pos-checkout-card">
+                            <h3>Checkout Details</h3>
+                            <hr style="border: none; border-top: 1px solid var(--border-color); margin: 12px 0;">
+
+                            <div class="form-group">
+                                <label for="pos-customer-phone">Customer Phone (Lookup)</label>
+                                <div class="input-wrapper">
+                                    <i data-lucide="phone" class="input-icon"></i>
+                                    <input type="text" id="pos-customer-phone" placeholder="e.g. 9876543210">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="pos-customer-name">Customer Name</label>
+                                <div class="input-wrapper">
+                                    <i data-lucide="user" class="input-icon"></i>
+                                    <input type="text" id="pos-customer-name" placeholder="Walk-in Customer">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="pos-notes">Order Notes / Ref</label>
+                                <textarea id="pos-notes" rows="2" placeholder="Optional notes..."></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="field-label">Payment Mode *</label>
+                                <div class="payment-mode-selector">
+                                    <button type="button" class="btn btn-payment active" data-mode="cash">
+                                        <i data-lucide="banknote"></i>
+                                        <span>Cash</span>
+                                    </button>
+                                    <button type="button" class="btn btn-payment" data-mode="upi">
+                                        <i data-lucide="qr-code"></i>
+                                        <span>UPI</span>
+                                    </button>
+                                    <button type="button" class="btn btn-payment" data-mode="card">
+                                        <i data-lucide="credit-card"></i>
+                                        <span>Card</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="pos-summary-panel">
+                                <div class="summary-row">
+                                    <span>Subtotal:</span>
+                                    <span id="pos-summary-subtotal">₹0.00</span>
+                                </div>
+                                <div class="summary-row">
+                                    <span>Tax (GST):</span>
+                                    <span id="pos-summary-tax">₹0.00</span>
+                                </div>
+                                <div class="summary-row">
+                                    <span>Item Discount:</span>
+                                    <span id="pos-summary-item-discount" style="color: var(--color-warning);">-₹0.00</span>
+                                </div>
+                                <div class="summary-row">
+                                    <label for="pos-bill-discount" style="font-weight: normal; margin-bottom: 0;">Bill Discount (₹):</label>
+                                    <input type="number" id="pos-bill-discount" step="0.01" min="0" value="0.00" style="width: 90px; text-align: right; padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card);">
+                                </div>
+                                <div class="summary-row total-row">
+                                    <span>NET TOTAL:</span>
+                                    <span id="pos-summary-total">₹0.00</span>
+                                </div>
+                            </div>
+
+                            <div id="pos-error" class="error-msg hidden">
+                                <i data-lucide="alert-circle"></i>
+                                <span id="pos-error-text">An error occurred</span>
+                            </div>
+
+                            <button type="button" class="btn btn-primary btn-block btn-large" id="pos-checkout-btn" style="margin-top: 15px;">
+                                <i data-lucide="check-circle-2"></i>
+                                <span>Complete Checkout</span>
+                            </button>
+                        </div>
+                    </aside>
+                </div>
+            </section>
+
             <section id="tab-sales" class="tab-panel hidden">
                 <div class="table-actions">
                     <div class="search-filters">

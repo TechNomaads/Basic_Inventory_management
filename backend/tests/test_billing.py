@@ -364,3 +364,49 @@ async def test_customer_lookup(
         headers=headers,
     )
     assert response_404.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_checkout_with_overrides(
+    client: AsyncClient, db_session: AsyncSession, admin_user
+):
+    """Checkout with custom unit price, custom tax rate, and item discount."""
+    product, location, inventory = await _create_billing_test_data(db_session)
+    headers = auth_headers(admin_user)
+
+    response = await client.post(
+        "/api/v1/billing/checkout",
+        json={
+            "location_id": str(location.id),
+            "payment_mode": "cash",
+            "items": [
+                {
+                    "product_id": str(product.id),
+                    "quantity": 2,
+                    "known_version": 0,
+                    "unit_price": 600.00,       # Override 799.00 -> 600.00
+                    "tax_rate": 10.00,          # Override 18% -> 10%
+                    "discount_amount": 100.00,  # Line discount of 100
+                }
+            ],
+        },
+        headers=headers,
+    )
+    assert response.status_code == 201
+    data = response.json()
+
+    # Calculations:
+    # unit_price = 600.0
+    # raw_subtotal = 600 * 2 = 1200
+    # item_subtotal = max(0, 1200 - 100) = 1100
+    # tax = 1100 * 10% = 110.0
+    # total = 1100 + 110 = 1210.0
+    assert round(data["subtotal"], 2) == 1100.00
+    assert round(data["tax_amount"], 2) == 110.00
+    assert round(data["total_amount"], 2) == 1210.00
+    assert len(data["items"]) == 1
+    assert data["items"][0]["unit_price"] == 600.00
+    assert data["items"][0]["tax_rate"] == 10.00
+    assert data["items"][0]["tax_amount"] == 110.00
+    assert data["items"][0]["line_total"] == 1210.00
+

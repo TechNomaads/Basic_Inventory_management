@@ -57,7 +57,9 @@ async def get_sales_trend(
             InvoiceItemModel.cost_price,
             InvoiceItemModel.quantity,
             InvoiceModel.discount_amount,
-            InvoiceModel.id.label("invoice_id")
+            InvoiceModel.id.label("invoice_id"),
+            InvoiceItemModel.line_total,
+            InvoiceItemModel.tax_amount
         )
         .join(InvoiceModel, InvoiceModel.id == InvoiceItemModel.invoice_id)
         .where(InvoiceModel.created_at >= start_date)
@@ -74,7 +76,7 @@ async def get_sales_trend(
     invoice_discounts = {}  # invoice_id -> discount_amount to avoid double-deducting invoice discount
 
     for row in rows:
-        # row: invoice_date (str or date), unit_price, cost_price, quantity, discount_amount, invoice_id
+        # row: invoice_date (str or date), unit_price, cost_price, quantity, discount_amount, invoice_id, line_total, tax_amount
         d_val = row[0]
         if isinstance(d_val, str):
             d_date = date.fromisoformat(d_val)
@@ -86,6 +88,8 @@ async def get_sales_trend(
         qty = int(row[3] or 0)
         discount = float(row[4] or 0.0)
         inv_id = row[5]
+        line_tot = float(row[6] or 0.0)
+        tax_amt = float(row[7] or 0.0)
 
         invoice_discounts[inv_id] = discount
 
@@ -95,7 +99,7 @@ async def get_sales_trend(
                 "cost_subtotal": 0.0,
             }
 
-        daily_stats[d_date]["sell_subtotal"] += unit_p * qty
+        daily_stats[d_date]["sell_subtotal"] += (line_tot - tax_amt)
         daily_stats[d_date]["cost_subtotal"] += cost_p * qty
 
     # 3. Sum up total invoice discount per day to subtract from revenue and profit

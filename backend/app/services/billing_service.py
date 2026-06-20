@@ -144,11 +144,12 @@ async def process_checkout(
             )
 
         # Base calculations (Tax-exclusive added on top)
-        unit_price = float(product.sell_price or 0.0)
+        unit_price = float(item.unit_price if item.unit_price is not None else (product.sell_price or 0.0))
         cost_price = float(product.cost_price or 0.0) if product.cost_price else None
-        tax_rate = float(product.tax_rate)
+        tax_rate = float(item.tax_rate if item.tax_rate is not None else product.tax_rate)
 
-        item_subtotal = unit_price * item.quantity
+        raw_subtotal = unit_price * item.quantity
+        item_subtotal = max(0.0, raw_subtotal - float(item.discount_amount))
         item_tax = item_subtotal * (tax_rate / 100.0)
         line_total = item_subtotal + item_tax
 
@@ -361,8 +362,10 @@ async def get_daily_sales_summary(db: AsyncSession, location_id: uuid.UUID | Non
     revenue = float(revenue or 0.0)
     total_discount = float(total_discount or 0.0)
 
-    # Profit calculation: SUM((invoice_items.unit_price - invoice_items.cost_price) * quantity) - invoice.discount_amount
+    # Profit calculation: SUM((line_total - tax_amount) - (cost_price * quantity)) - invoice.discount_amount
     stmt_items = select(
+        InvoiceItemModel.line_total,
+        InvoiceItemModel.tax_amount,
         InvoiceItemModel.unit_price,
         InvoiceItemModel.cost_price,
         InvoiceItemModel.quantity
@@ -377,11 +380,12 @@ async def get_daily_sales_summary(db: AsyncSession, location_id: uuid.UUID | Non
     total_cost_subtotal = 0.0
     total_sell_subtotal = 0.0
 
-    for unit_p, cost_p, qty in items:
+    for line_tot, tax_amt, unit_p, cost_p, qty in items:
         # Use snapshotted cost price, fall back to unit sell price if cost price is null (margin = 0)
         c_price = float(cost_p) if cost_p is not None else float(unit_p)
         total_cost_subtotal += c_price * qty
-        total_sell_subtotal += float(unit_p) * qty
+        # Use actual discounted item subtotal (before tax)
+        total_sell_subtotal += float(line_tot) - float(tax_amt)
 
     # Gross profit = sell subtotal - cost subtotal - discount
     profit = max(0.0, total_sell_subtotal - total_cost_subtotal - total_discount)

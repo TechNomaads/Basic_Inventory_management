@@ -34,6 +34,9 @@ class CheckoutItem(BaseModel):
     product_id: UUID
     quantity: int = Field(..., gt=0, description="Quantity must be greater than zero")
     known_version: int = Field(..., description="Optimistic lock version for this product in inventory")
+    unit_price: float | None = Field(default=None, description="Custom unit price override")
+    tax_rate: float | None = Field(default=None, description="Custom tax rate override")
+    discount_amount: float = Field(default=0.0, ge=0.0, description="Line item discount amount")
 
 
 class CheckoutRequest(BaseModel):
