@@ -69,8 +69,8 @@ class InvoiceSuccessScreen extends ConsumerWidget {
                   children: [
                     Container(
                       padding: const EdgeInsets.all(16),
-                      decoration: const BoxDecoration(
-                        color: AppColors.successBg,
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withOpacity(0.12),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(

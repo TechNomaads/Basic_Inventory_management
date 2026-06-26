@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 
-import '../../billing/domain/billing_notifier.dart';
-import '../../billing/domain/cart_item.dart';
+import '../../../billing/domain/billing_notifier.dart';
+import '../../../billing/domain/cart_item.dart';
 import '../../../../core/constants/api_endpoints.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/storage/cache_sync_service.dart';
@@ -18,7 +18,7 @@ import '../scan_handler.dart';
 ///   4. Add product to cart via [BillingNotifier]
 ///   5. Camera stays open (continuous scanning)
 class BillingScanHandler extends ScanHandler {
-  final Ref _ref;
+  final WidgetRef _ref;
 
   BillingScanHandler(this._ref);
 

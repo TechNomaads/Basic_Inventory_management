@@ -5,10 +5,10 @@ import '../../../../core/constants/api_endpoints.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/storage/cache_sync_service.dart';
 import '../../../../core/storage/app_database.dart';
-import '../../billing/domain/billing_notifier.dart';
+import '../../../billing/domain/billing_notifier.dart';
 import '../scan_handler.dart';
-import '../../scanner/presentation/stock_edit_modal.dart';
-import '../../scanner/presentation/quick_add_product_modal.dart';
+import '../../presentation/stock_edit_modal.dart';
+import '../../presentation/quick_add_product_modal.dart';
 
 /// Inventory mode scan handler — stock edit or new product creation.
 ///
@@ -17,7 +17,7 @@ import '../../scanner/presentation/quick_add_product_modal.dart';
 ///   2. If FOUND → return StockEditModal as prompt
 ///   3. If NOT FOUND → return QuickAddProductModal as prompt
 class InventoryScanHandler extends ScanHandler {
-  final Ref _ref;
+  final WidgetRef _ref;
 
   InventoryScanHandler(this._ref);
 

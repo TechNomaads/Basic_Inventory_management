@@ -38,7 +38,7 @@ dependencies:
   shimmer: ^3.0.0
   fl_chart: ^0.68.0
   lottie: ^3.1.2
-  vibration: ^1.9.0
+  vibration: ^3.0.0
 
   # File system
   path_provider: ^2.1.3

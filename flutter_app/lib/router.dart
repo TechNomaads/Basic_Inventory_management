@@ -26,6 +26,10 @@ import 'features/users_mgmt/presentation/add_user_screen.dart';
 import 'features/audit/presentation/audit_log_screen.dart';
 import 'features/billing/presentation/billing_screen.dart';
 import 'features/billing/presentation/invoice_success_screen.dart';
+import 'features/billing/presentation/sales_history_screen.dart';
+import 'features/customer/presentation/customer_list_screen.dart';
+import 'features/customer/presentation/customer_detail_screen.dart';
+import 'features/audit/presentation/pending_approvals_screen.dart';
 
 /// GoRouter provider that rebuilds on auth state changes
 final routerProvider = Provider<GoRouter>((ref) {
@@ -112,6 +116,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/billing/success',
         builder: (context, state) => const InvoiceSuccessScreen(),
+      ),
+      GoRoute(
+        path: '/customers',
+        builder: (context, state) => const CustomerListScreen(),
+      ),
+      GoRoute(
+        path: '/customers/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return CustomerDetailScreen(customerId: id);
+        },
+      ),
+      GoRoute(
+        path: '/sales-history',
+        builder: (context, state) => const SalesHistoryScreen(),
+      ),
+      GoRoute(
+        path: '/pending-approvals',
+        builder: (context, state) => const PendingApprovalsScreen(),
       ),
     ],
   );

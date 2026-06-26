@@ -10,6 +10,9 @@ class CartState {
   final bool isLoading;
   final String? errorMessage;
   final Map<String, dynamic>? invoice; // holds response on successful checkout
+  final double? amountPaid;
+  final double customerCreditLimit;
+  final double customerOverdue;
 
   const CartState({
     this.items = const [],
@@ -21,6 +24,9 @@ class CartState {
     this.isLoading = false,
     this.errorMessage,
     this.invoice,
+    this.amountPaid,
+    this.customerCreditLimit = 10000.0,
+    this.customerOverdue = 0.0,
   });
 
   double get subtotal => items.fold(0.0, (sum, item) => sum + item.subtotal);
@@ -41,6 +47,10 @@ class CartState {
     String? errorMessage,
     Map<String, dynamic>? invoice,
     bool clearInvoice = false,
+    double? amountPaid,
+    bool clearAmountPaid = false,
+    double? customerCreditLimit,
+    double? customerOverdue,
   }) {
     return CartState(
       items: items ?? this.items,
@@ -50,8 +60,11 @@ class CartState {
       discountAmount: discountAmount ?? this.discountAmount,
       notes: notes ?? this.notes,
       isLoading: isLoading ?? this.isLoading,
-      errorMessage: errorMessage, // Note: if null, it resets
+      errorMessage: errorMessage,
       invoice: clearInvoice ? null : (invoice ?? this.invoice),
+      amountPaid: clearAmountPaid ? null : (amountPaid ?? this.amountPaid),
+      customerCreditLimit: customerCreditLimit ?? this.customerCreditLimit,
+      customerOverdue: customerOverdue ?? this.customerOverdue,
     );
   }
 }

@@ -11,7 +11,7 @@ FROM python:3.11-slim AS runtime
 
 # Security: run as non-root user
 RUN groupadd -r appuser && useradd -r -g appuser appuser
-
+ 
 WORKDIR /app
 
 # Copy installed packages from builder

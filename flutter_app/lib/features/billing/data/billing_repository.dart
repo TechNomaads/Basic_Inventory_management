@@ -65,4 +65,31 @@ class BillingRepository {
     );
     return response.data as Map<String, dynamic>;
   }
+
+  /// Fetch list of invoices
+  Future<List<Map<String, dynamic>>> fetchInvoices({
+    String? locationId,
+    int skip = 0,
+    int limit = 50,
+  }) async {
+    final Map<String, dynamic> queryParameters = {
+      'skip': skip,
+      'limit': limit,
+    };
+    if (locationId != null) {
+      queryParameters['location_id'] = locationId;
+    }
+    final response = await _dio.get(
+      ApiEndpoints.invoices,
+      queryParameters: queryParameters,
+    );
+    final list = response.data as List<dynamic>;
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  /// Fetch a single invoice detail
+  Future<Map<String, dynamic>> fetchInvoiceById(String id) async {
+    final response = await _dio.get(ApiEndpoints.invoiceDetail(id));
+    return response.data as Map<String, dynamic>;
+  }
 }

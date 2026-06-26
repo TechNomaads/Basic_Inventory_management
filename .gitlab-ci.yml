@@ -1,0 +1,23 @@
+stages:
+  - deploy
+
+deploy_to_ec2:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    # Install SSH client and Git
+    - apk add --no-cache openssh-client git
+    # Start the SSH agent
+    - eval $(ssh-agent -s)
+    # Add the private key stored in SSH_PRIVATE_KEY variable
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    # Create the SSH directory and add host keys
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -H "$EC2_IP" >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    # SSH into EC2, clean local state, pull latest code, and launch production containers
+    - ssh $EC2_USER@$EC2_IP "cd $DEPLOY_PATH && git fetch origin && git reset --hard origin/main && docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build"
+  only:
+    - main

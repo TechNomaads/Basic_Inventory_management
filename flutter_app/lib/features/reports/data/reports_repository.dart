@@ -60,10 +60,12 @@ class ReportsRepository {
     int page = 1,
     int size = 10,
     String? type,
+    String? productId,
   }) async {
     final Map<String, dynamic> queryParams = {
       'page': page,
       'size': size,
+      if (productId != null) 'product_id': productId,
     };
     if (type != null) {
       queryParams['type'] = type;

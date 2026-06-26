@@ -67,6 +67,18 @@ class DashboardScreen extends ConsumerWidget {
             onSelected: (value) {
               if (value == 'logout') {
                 ref.read(authNotifierProvider.notifier).logout();
+              } else if (value == 'products') {
+                context.push('/products-mgmt');
+              } else if (value == 'users') {
+                context.push('/users-mgmt');
+              } else if (value == 'customers') {
+                context.push('/customers');
+              } else if (value == 'sales') {
+                context.push('/sales-history');
+              } else if (value == 'pending') {
+                context.push('/pending-approvals');
+              } else if (value == 'audit') {
+                context.push('/audit');
               }
             },
             itemBuilder: (context) => [
@@ -88,10 +100,51 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
                 const PopupMenuItem(
+                  value: 'customers',
+                  child: ListTile(
+                    leading: Icon(Icons.people_outline_rounded, color: AppColors.textSecondary),
+                    title: Text('Customers Directory'),
+                    dense: true,
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'sales',
+                  child: ListTile(
+                    leading: Icon(Icons.receipt_long_rounded, color: AppColors.textSecondary),
+                    title: Text('Sales History'),
+                    dense: true,
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'pending',
+                  child: ListTile(
+                    leading: Icon(Icons.pending_actions_rounded, color: AppColors.textSecondary),
+                    title: Text('Pending Approvals'),
+                    dense: true,
+                  ),
+                ),
+                const PopupMenuItem(
                   value: 'audit',
                   child: ListTile(
                     leading: Icon(Icons.history, color: AppColors.textSecondary),
                     title: Text(AppStrings.auditLog),
+                    dense: true,
+                  ),
+                ),
+              ] else ...[
+                const PopupMenuItem(
+                  value: 'customers',
+                  child: ListTile(
+                    leading: Icon(Icons.people_outline_rounded, color: AppColors.textSecondary),
+                    title: Text('Customers Directory'),
+                    dense: true,
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'sales',
+                  child: ListTile(
+                    leading: Icon(Icons.receipt_long_rounded, color: AppColors.textSecondary),
+                    title: Text('Sales History'),
                     dense: true,
                   ),
                 ),
@@ -145,24 +198,28 @@ class DashboardScreen extends ConsumerWidget {
                       value: '$totalProducts',
                       icon: Icons.inventory_2_rounded,
                       color: AppColors.primary,
+                      onTap: () => context.push('/products-mgmt'),
                     ),
                     _MetricCard(
                       title: AppStrings.lowStock,
                       value: '$lowStock',
                       icon: Icons.warning_amber_rounded,
                       color: AppColors.stockAmber,
+                      onTap: () => context.push('/products-mgmt?filter=low_stock'),
                     ),
                     _MetricCard(
                       title: AppStrings.todaysScans,
                       value: '$todaysScans',
                       icon: Icons.qr_code_scanner,
                       color: AppColors.accent,
+                      onTap: () => context.push('/sales-history'),
                     ),
                     _MetricCard(
                       title: AppStrings.pendingApprovals,
                       value: '$pending',
                       icon: Icons.pending_actions,
                       color: AppColors.warning,
+                      onTap: isAdmin ? () => context.push('/pending-approvals') : null,
                     ),
                   ],
                 );
@@ -267,7 +324,12 @@ class DashboardScreen extends ConsumerWidget {
                 child: Center(
                   child: Text(
                     'Failed to load sales: $err',
-                    style: const TextStyle(color: AppColors.erro            const SizedBox(height: 24),
+                    style: const TextStyle(color: AppColors.error),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
             Text(
               'Weekly Sales Performance',
               style: GoogleFonts.outfit(
@@ -647,7 +709,7 @@ class DashboardScreen extends ConsumerWidget {
                 context.push('/reports');
                 break;
               case 4:
-                if (isAdmin) context.push('/products-mgmt');
+                context.push('/products-mgmt');
                 break;
             }
           },
@@ -669,8 +731,8 @@ class DashboardScreen extends ConsumerWidget {
               label: 'Reports',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.settings_rounded),
-              label: 'Manage',
+              icon: Icon(Icons.inventory_2_rounded),
+              label: 'Products',
             ),
           ],
         ),
@@ -685,61 +747,66 @@ class _MetricCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTap;
 
   const _MetricCard({
     required this.title,
     required this.value,
     required this.icon,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.15)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.15)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: color, size: 20),
                 ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: GoogleFonts.outfit(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+              ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: GoogleFonts.outfit(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-              ),
-              Text(
-                title,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,5 +1,7 @@
 // ── API CONFIGURATION ──
-const API_URL = 'http://localhost:8000';
+const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:8000'
+    : window.location.origin;
 
 // ── STATE STORE ──
 const state = {
@@ -281,6 +283,16 @@ function bindEvents() {
 
     const cardTodaysRevenue = document.getElementById('card-todays-revenue');
     if (cardTodaysRevenue) cardTodaysRevenue.addEventListener('click', () => showMetricDetails('todays-revenue'));
+
+    // Customer Directory interactive cards
+    const cardCustomersCount = document.getElementById('card-customers-count');
+    if (cardCustomersCount) cardCustomersCount.addEventListener('click', () => showMetricDetails('customers-count'));
+
+    const cardCustomersOverdue = document.getElementById('card-customers-overdue');
+    if (cardCustomersOverdue) cardCustomersOverdue.addEventListener('click', () => showMetricDetails('customers-overdue'));
+
+    const cardCustomersCredit = document.getElementById('card-customers-credit');
+    if (cardCustomersCredit) cardCustomersCredit.addEventListener('click', () => showMetricDetails('customers-credit'));
 }
 
 // ── AUTHENTICATION CONTROLLERS ──
@@ -2004,7 +2016,7 @@ window.updateCartItemField = updateCartItemField;
 window.removePosCartItem = removePosCartItem;
 window.adjustCartQty = adjustCartQty;
 
-window.editCustomer = editCustomer;
+window.editCustomer = openCustomerModal;
 window.showCustomerHistory = showCustomerHistory;
 window.loadCustomersData = loadCustomersData;
 window.openCustomerModal = openCustomerModal;
@@ -2489,6 +2501,131 @@ async function showMetricDetails(metricType) {
                     </tr>
                 `;
             }).join('');
+        } else if (metricType === 'customers-count' || metricType === 'customers-overdue' || metricType === 'customers-credit') {
+            const isOverdue = metricType === 'customers-overdue';
+            const isCredit = metricType === 'customers-credit';
+
+            if (metricType === 'customers-count') {
+                titleEl.textContent = 'Total Customers Directory Details';
+            } else if (isOverdue) {
+                titleEl.textContent = 'Outstanding Debt Details';
+            } else {
+                titleEl.textContent = 'Total Credit Limit Details';
+            }
+
+            // Fetch customer KPIs and list of customers (up to 100)
+            const [kpis, customersRes] = await Promise.all([
+                fetchWithAuth(`${API_URL}/api/v1/customers/kpis`),
+                fetchWithAuth(`${API_URL}/api/v1/customers?page=1&size=100`)
+            ]);
+            const customers = customersRes.items || [];
+
+            const totalCount = kpis.total_count || customers.length;
+            const totalOverdue = kpis.total_overdue || 0;
+            const totalCredit = kpis.total_credit || 0;
+
+            const debtorsCount = customers.filter(c => c.overdue_amount > 0).length;
+            const maxDebt = customers.length > 0 ? Math.max(...customers.map(c => c.overdue_amount), 0) : 0;
+            const avgCredit = totalCount > 0 ? totalCredit / totalCount : 0;
+            const maxCredit = customers.length > 0 ? Math.max(...customers.map(c => c.credit_limit), 0) : 0;
+
+            // Summary KPIs
+            if (metricType === 'customers-count') {
+                summaryContainer.innerHTML = `
+                    <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                        <div class="text-hint text-xs font-semibold">TOTAL CUSTOMERS</div>
+                        <div class="text-primary text-2xl font-bold" style="font-family: var(--font-display);">${totalCount}</div>
+                    </div>
+                    <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                        <div class="text-hint text-xs font-semibold">CUSTOMERS WITH DEBT</div>
+                        <div class="text-danger text-2xl font-bold" style="font-family: var(--font-display);">${debtorsCount}</div>
+                    </div>
+                    <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                        <div class="text-hint text-xs font-semibold">AVG CREDIT LIMIT</div>
+                        <div class="text-success text-2xl font-bold" style="font-family: var(--font-display);">₹${avgCredit.toFixed(2)}</div>
+                    </div>
+                `;
+            } else if (isOverdue) {
+                summaryContainer.innerHTML = `
+                    <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                        <div class="text-hint text-xs font-semibold">TOTAL OUTSTANDING DEBT</div>
+                        <div class="text-danger text-2xl font-bold" style="font-family: var(--font-display);">₹${totalOverdue.toFixed(2)}</div>
+                    </div>
+                    <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                        <div class="text-hint text-xs font-semibold">ACTIVE DEBTORS</div>
+                        <div class="text-warning text-2xl font-bold" style="font-family: var(--font-display);">${debtorsCount}</div>
+                    </div>
+                    <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                        <div class="text-hint text-xs font-semibold">MAX INDIVIDUAL DEBT</div>
+                        <div class="text-primary text-2xl font-bold" style="font-family: var(--font-display);">₹${maxDebt.toFixed(2)}</div>
+                    </div>
+                `;
+            } else {
+                summaryContainer.innerHTML = `
+                    <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                        <div class="text-hint text-xs font-semibold">TOTAL CREDIT LIMIT</div>
+                        <div class="text-success text-2xl font-bold" style="font-family: var(--font-display);">₹${totalCredit.toFixed(2)}</div>
+                    </div>
+                    <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                        <div class="text-hint text-xs font-semibold">AVERAGE CREDIT LIMIT</div>
+                        <div class="text-primary text-2xl font-bold" style="font-family: var(--font-display);">₹${avgCredit.toFixed(2)}</div>
+                    </div>
+                    <div class="metric-kpi-card" style="flex: 1; min-width: 140px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                        <div class="text-hint text-xs font-semibold">MAX CREDIT LIMIT</div>
+                        <div class="text-secondary text-2xl font-bold" style="font-family: var(--font-display); color: var(--color-secondary);">₹${maxCredit.toFixed(2)}</div>
+                    </div>
+                `;
+            }
+
+            // Charts
+            if (metricType === 'customers-count') {
+                const debtFree = customers.length - debtorsCount;
+                chartContainer.innerHTML = drawCustomersDebtDonutChart(debtorsCount, debtFree);
+            } else if (isOverdue) {
+                const debtors = customers.filter(c => c.overdue_amount > 0).sort((a, b) => b.overdue_amount - a.overdue_amount);
+                if (debtors.length === 0) {
+                    chartContainer.innerHTML = '<div class="text-muted">No outstanding debt across all customers!</div>';
+                } else {
+                    chartContainer.innerHTML = drawCustomerDebtChart(debtors);
+                }
+            } else {
+                chartContainer.innerHTML = drawCustomerCreditChart(customers);
+            }
+
+            // Tables
+            tableHeader.innerHTML = `
+                <th>Customer Name</th>
+                <th>Phone Number</th>
+                <th>Credit Limit</th>
+                <th>Overdue Balance</th>
+                <th>Created Date</th>
+            `;
+
+            let displayCustomers = [...customers];
+            if (isOverdue) {
+                displayCustomers = customers.filter(c => c.overdue_amount > 0).sort((a, b) => b.overdue_amount - a.overdue_amount);
+            } else if (isCredit) {
+                displayCustomers = [...customers].sort((a, b) => b.credit_limit - a.credit_limit);
+            }
+
+            if (displayCustomers.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No customer records found.</td></tr>';
+            } else {
+                tableBody.innerHTML = displayCustomers.map(c => {
+                    const dateStr = new Date(c.created_at).toLocaleDateString([], { dateStyle: 'medium' });
+                    return `
+                        <tr>
+                            <td><strong>${escapeHtml(c.name)}</strong></td>
+                            <td><code>${escapeHtml(c.phone || '—')}</code></td>
+                            <td>₹${c.credit_limit.toFixed(2)}</td>
+                            <td class="${c.overdue_amount > 0 ? 'text-danger font-semibold' : 'text-success'}">
+                                ₹${c.overdue_amount.toFixed(2)}
+                            </td>
+                            <td>${dateStr}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
         }
 
         // Initialize Lucide icons in the dynamically loaded elements

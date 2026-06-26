@@ -32,6 +32,19 @@ class ProductCacheDao extends DatabaseAccessor<AppDatabase>
         .getSingleOrNull();
   }
 
+  /// Search products in the local cache by name, SKU, or barcode.
+  Future<List<CachedProduct>> searchProducts(String query) async {
+    if (query.isEmpty) {
+      return select(cachedProducts).get();
+    }
+    return (select(cachedProducts)
+          ..where((t) =>
+              t.name.like('%$query%') |
+              t.sku.like('%$query%') |
+              t.barcode.like('%$query%')))
+        .get();
+  }
+
   /// Insert or update a product from an API response map.
   Future<void> upsertProduct(Map<String, dynamic> data) async {
     await into(cachedProducts).insertOnConflictUpdate(

@@ -7,13 +7,18 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 class ApiEndpoints {
   ApiEndpoints._();
 
-  /// Base URL — auto-detects Android emulator vs web/desktop
+  static const String _envBaseUrl = String.fromEnvironment('API_URL', defaultValue: '');
+
+  /// Base URL — auto-detects Android emulator vs web/desktop, supports compile-time override
   static String get baseUrl {
+    if (_envBaseUrl.isNotEmpty) {
+      return _envBaseUrl;
+    }
     if (kIsWeb) {
       return 'http://localhost:8000';
     }
-    // Android emulator routes to host machine via 10.0.2.2
-    return 'http://10.0.2.2:8000';
+    // Physical mobile device connects to the host machine's IP address
+    return 'http://192.168.0.120:8000';
   }
 
   /// WebSocket URL for Socket.IO

@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import '../data/billing_repository.dart';
 import 'cart_item.dart';
 import 'cart_state.dart';
+import '../../../core/storage/cache_sync_service.dart';
 
 /// Provider for the store locations metadata list
 final locationsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
@@ -204,7 +205,15 @@ class BillingNotifier extends StateNotifier<CartState> {
     state = state.copyWith(
       customerName: name,
       customerPhone: phone,
+      customerCreditLimit: 10000.0,
+      customerOverdue: 0.0,
+      clearAmountPaid: true,
     );
+  }
+
+  /// Set amount paid
+  void setAmountPaid(double? amount) {
+    state = state.copyWith(amountPaid: amount, clearAmountPaid: amount == null);
   }
 
   /// Set payment method (cash, card, upi)
@@ -239,6 +248,98 @@ class BillingNotifier extends StateNotifier<CartState> {
     );
   }
 
+  /// Add a product directly from a manual search/selection
+  Future<bool> addProductDirectly(String productId) async {
+    final locationId = _ref.read(selectedLocationProvider);
+    if (locationId == null) {
+      state = state.copyWith(errorMessage: 'Please select a store location first');
+      return false;
+    }
+
+    state = state.copyWith(isLoading: true, errorMessage: null);
+
+    try {
+      // 1. Get product from local cache
+      final dao = _ref.read(productCacheDaoProvider);
+      final product = await dao.getById(productId);
+      if (product == null) {
+        state = state.copyWith(
+          isLoading: false,
+          errorMessage: "Product not found in local cache.",
+        );
+        return false;
+      }
+
+      // 2. Fetch inventory cache. If empty, try to refresh it
+      var inventoryMap = _ref.read(locationInventoryProvider);
+      if (inventoryMap.isEmpty) {
+        await _ref.read(locationInventoryProvider.notifier).refreshInventory(locationId);
+        inventoryMap = _ref.read(locationInventoryProvider);
+      }
+
+      // 3. Match product to inventory at this location
+      final inv = inventoryMap[productId];
+      if (inv == null) {
+        state = state.copyWith(
+          isLoading: false,
+          errorMessage: "Product '${product.name}' has no inventory record at this location.",
+        );
+        return false;
+      }
+
+      final int stockQty = inv['quantity'] as int;
+      final int version = inv['version'] as int;
+
+      if (stockQty <= 0) {
+        state = state.copyWith(
+          isLoading: false,
+          errorMessage: "Product '${product.name}' is out of stock at this location.",
+        );
+        return false;
+      }
+
+      // Check if item already exists in cart
+      final existingIndex = state.items.indexWhere((item) => item.productId == productId);
+      if (existingIndex >= 0) {
+        final existingItem = state.items[existingIndex];
+        if (existingItem.quantity >= stockQty) {
+          state = state.copyWith(
+            isLoading: false,
+            errorMessage: "Cannot add more. Only $stockQty items available in stock.",
+          );
+          return false;
+        }
+
+        final updatedItems = List<CartItem>.from(state.items);
+        updatedItems[existingIndex] = existingItem.copyWith(
+          quantity: existingItem.quantity + 1,
+        );
+        state = state.copyWith(items: updatedItems, isLoading: false);
+      } else {
+        // Add new item
+        final newItem = CartItem(
+          productId: productId,
+          name: product.name,
+          barcode: product.barcode,
+          sellPrice: product.sellPrice,
+          sku: product.sku,
+          quantity: 1,
+          stockQuantity: stockQty,
+          knownVersion: version,
+          taxRate: product.taxRate,
+        );
+        state = state.copyWith(
+          items: [...state.items, newItem],
+          isLoading: false,
+        );
+      }
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      return false;
+    }
+  }
+
   /// Lookup customer by phone number
   Future<bool> lookupCustomerPhone(String phone) async {
     if (phone.length < 10) return false;
@@ -249,6 +350,8 @@ class BillingNotifier extends StateNotifier<CartState> {
         state = state.copyWith(
           customerName: customer['name'] as String,
           customerPhone: phone,
+          customerCreditLimit: (customer['credit_limit'] as num?)?.toDouble() ?? 10000.0,
+          customerOverdue: (customer['overdue_amount'] as num?)?.toDouble() ?? 0.0,
         );
         return true;
       }
@@ -281,6 +384,7 @@ class BillingNotifier extends StateNotifier<CartState> {
         'location_id': locationId,
         'payment_mode': state.paymentMode.toLowerCase(),
         'discount_amount': state.discountAmount,
+        'amount_paid': state.amountPaid ?? state.totalAmount,
         'notes': state.notes.isEmpty ? null : state.notes,
         'customer_name': state.customerName.isEmpty ? null : state.customerName,
         'customer_phone': state.customerPhone.isEmpty ? null : state.customerPhone,

@@ -29,4 +29,10 @@ echo "🌱 Seeding admin user (if not exists)..."
 python -m app.seed
 
 echo "🚀 Starting FastAPI server..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+if [ "$DEBUG" = "True" ] || [ "$DEBUG" = "true" ] || [ "$DEBUG" = "1" ]; then
+    echo "  -> Running in DEVELOPMENT mode with hot-reload"
+    exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+else
+    echo "  -> Running in PRODUCTION mode"
+    exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+fi
