@@ -421,193 +421,530 @@ async def get_daily_sales_summary(db: AsyncSession, location_id: uuid.UUID | Non
 
 def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
     """
-    Generates a thermal printer-friendly HTML document.
-    Sized for 58mm/80mm rolls. Clean, monospaced layout with minimal borders.
+    Generates a professional A4 invoice HTML styled after the Master of Security System letterhead
+    and UTTRAYAN Quotation content.
     """
-    items_html = ""
-    for item in invoice.items:
-        prod_name = item.product.name if item.product else "Unknown Product"
-        # truncate name to fit line
-        display_name = prod_name[:18] + ".." if len(prod_name) > 18 else prod_name
-        qty_price = f"{item.quantity} x ₹{item.unit_price:.2f}"
-        total_str = f"₹{item.line_total:.2f}"
-        
-        items_html += f"""
-        <tr>
-            <td colspan="2" style="font-weight: bold;">{display_name}</td>
-        </tr>
-        <tr>
-            <td style="padding-left: 10px; color: #555;">{qty_price} (GST {item.tax_rate}%)</td>
-            <td style="text-align: right; font-weight: bold;">{total_str}</td>
-        </tr>
-        """
+    import os
+    import base64
 
-    cust_html = ""
+    def get_hsn_code(product_name: str) -> str:
+        name = product_name.lower()
+        if "dome" in name or "bullet" in name or "camera" in name or "ip camera" in name:
+            return "85365090"
+        elif "switch" in name or "poe" in name:
+            return "85176290"
+        elif "hdd" in name or "seagate" in name or "hard disk" in name or "drive" in name:
+            return "84717020"
+        elif "ups" in name:
+            return "85044030"
+        elif "rack" in name:
+            return "85381010"
+        elif "cable" in name or "cat6" in name:
+            return "854449"
+        elif "nvr" in name:
+            return "85219090"
+        return "N/A"
+
+    def num_to_words(num: float) -> str:
+        try:
+            num = int(round(num))
+            if num == 0:
+                return "Zero Rupees only"
+                
+            units = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", 
+                     "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
+            tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+            
+            def helper(n):
+                if n < 20:
+                    return units[n]
+                elif n < 100:
+                    return tens[n // 10] + (" " + units[n % 10] if n % 10 != 0 else "")
+                elif n < 1000:
+                    return units[n // 100] + " Hundred" + (" and " + helper(n % 100) if n % 100 != 0 else "")
+                elif n < 100000: # 1 Lakh
+                    return helper(n // 1000) + " Thousand" + (" " + helper(n % 1000) if n % 1000 != 0 else "")
+                elif n < 10000000: # 1 Crore
+                    return helper(n // 100000) + " Lakh" + (" " + helper(n % 100000) if n % 100000 != 0 else "")
+                else:
+                    return helper(n // 10000000) + " Crore" + (" " + helper(n % 10000000) if n % 10000000 != 0 else "")
+            
+            words = helper(num).strip()
+            return words + " Rupees only"
+        except Exception:
+            return ""
+
+    # Load logo.png in base64
+    logo_base64 = ""
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        logo_path = os.path.abspath(os.path.join(current_dir, "..", "..", "..", "frontend", "logo.png"))
+        if os.path.exists(logo_path):
+            with open(logo_path, 'rb') as f:
+                logo_base64 = base64.b64encode(f.read()).decode('utf-8')
+        else:
+            fallback_path = "/Users/nikola/Downloads/inventory_management/Basic_Inventory_management/frontend/logo.png"
+            if os.path.exists(fallback_path):
+                with open(fallback_path, 'rb') as f:
+                    logo_base64 = base64.b64encode(f.read()).decode('utf-8')
+    except Exception:
+        pass
+
+    # Extract customer info
+    cust_name = "Anonymous/Walk-in"
+    cust_address = "N/A"
+    cust_phone = "N/A"
+    cust_gstin = "N/A"
+    cust_state = "N/A"
+
     if invoice.customer:
         cust_name = invoice.customer.name
         cust_phone = invoice.customer.phone or "N/A"
-        cust_html = f"""
-        <div class="info-block">
-            <strong>Customer:</strong> {cust_name}<br/>
-            <strong>Phone:</strong> {cust_phone}
-        </div>
-        <div class="separator">- - - - - - - - - - - - - - - -</div>
-        """
+        
+        # Hardcode Uttrayan details if name matches or phone matches
+        if "uttrayan" in cust_name.lower() or cust_phone in ["6292264489", "6293693085"]:
+            cust_name = "UTTRAYAN FINANCIAL SERVICES PVT. LTD."
+            cust_address = "12th Floor, Unit No. 1202, Plot No. G-1, Infinity Benchmark, EP & GP Block, Salt Lake City, Bidhan Nagar, North Twenty Four Parganas. PIN: 700091"
+            cust_phone = "6292264489, 6293693085"
+            cust_gstin = "19AABCC0070E1Z6"
+            cust_state = "19-West Bengal"
+        else:
+            cust_state = "19-West Bengal"  # Default state
 
     # Format timestamp
-    date_str = invoice.created_at.astimezone().strftime("%Y-%m-%d %I:%M %p")
+    date_str = invoice.created_at.astimezone().strftime("%d-%m-%Y")
+
+    # Generate items table HTML
+    items_html = ""
+    for i, item in enumerate(invoice.items):
+        prod_name = item.product.name if item.product else "Unknown Product"
+        hsn = get_hsn_code(prod_name)
+        qty_val = item.quantity
+        rate_val = item.unit_price
+        total_val = item.line_total
+        
+        items_html += f"""
+        <tr>
+            <td style="text-align: center; border: 1px solid #cbd5e1; padding: 10px 8px;">{i + 1}</td>
+            <td style="border: 1px solid #cbd5e1; padding: 10px 8px; font-weight: 600;">{prod_name}</td>
+            <td style="text-align: center; border: 1px solid #cbd5e1; padding: 10px 8px;">{hsn}</td>
+            <td style="text-align: center; border: 1px solid #cbd5e1; padding: 10px 8px;">{qty_val}</td>
+            <td style="text-align: right; border: 1px solid #cbd5e1; padding: 10px 8px;">₹{rate_val:.2f}</td>
+            <td style="text-align: right; border: 1px solid #cbd5e1; padding: 10px 8px; font-weight: bold;">₹{total_val:.2f}</td>
+        </tr>
+        """
+
+    amount_in_words = num_to_words(invoice.total_amount)
 
     return f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Receipt - {invoice.invoice_number}</title>
+    <title>Quotation - {invoice.invoice_number}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Outfit & Inter Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
     <style>
         @page {{
-            size: 80mm auto;
+            size: A4;
             margin: 0;
         }}
         body {{
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 12px;
-            line-height: 1.4;
-            color: #000;
-            background: #fff;
-            width: 76mm;
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9;
+            margin: 0;
+            padding: 20px 0;
+            color: #1e293b;
+        }}
+        .invoice-page {{
+            background-color: #ffffff;
+            width: 210mm;
+            min-height: 297mm;
             margin: 0 auto;
-            padding: 10px 4px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            position: relative;
             box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
         }}
-        .text-center {{
-            text-align: center;
+        .header-banner {{
+            background-color: #0f172a;
+            color: #ffffff;
+            padding: 25px 30px;
+            border-bottom: 4px solid #eab308;
+            position: relative;
         }}
-        .header {{
-            margin-bottom: 12px;
+        .header-container {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }}
-        .store-title {{
-            font-size: 16px;
-            font-weight: bold;
+        .header-left {{
+            flex-grow: 1;
+        }}
+        .header-right {{
+            text-align: right;
+            margin-left: 20px;
+        }}
+        .logo-img {{
+            height: 65px;
+            width: 65px;
+            object-fit: contain;
+            background: white;
+            border-radius: 8px;
+            padding: 4px;
+            border: 1px solid #eab308;
+        }}
+        .invoice-body {{
+            padding: 30px 40px;
+            flex-grow: 1;
+        }}
+        .info-section {{
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }}
+        .info-col-left {{
+            width: 55%;
+        }}
+        .info-col-right {{
+            width: 40%;
+            text-align: right;
+        }}
+        .section-title {{
+            font-size: 13px;
+            font-weight: 700;
+            color: #475569;
             text-transform: uppercase;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #f1f5f9;
+            padding-bottom: 4px;
+            letter-spacing: 0.5px;
         }}
-        .separator {{
-            text-align: center;
-            margin: 8px 0;
-            letter-spacing: 2px;
-        }}
-        .info-block {{
+        .customer-name {{
+            font-size: 16px;
+            font-weight: 700;
+            color: #0f172a;
             margin-bottom: 6px;
-            font-size: 11px;
         }}
-        table {{
+        .customer-details {{
+            font-size: 12px;
+            color: #475569;
+            line-height: 1.5;
+        }}
+        .invoice-details-table {{
             width: 100%;
+            font-size: 12px;
+            margin-top: 5px;
             border-collapse: collapse;
-            margin-bottom: 10px;
         }}
-        td {{
+        .invoice-details-table td {{
             padding: 3px 0;
             vertical-align: top;
         }}
+        .invoice-details-table td.label {{
+            color: #64748b;
+            font-weight: 600;
+            text-align: right;
+            padding-right: 8px;
+            width: 60%;
+        }}
+        .invoice-details-table td.val {{
+            color: #0f172a;
+            font-weight: 700;
+            text-align: right;
+        }}
+        .items-table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+            font-size: 12px;
+        }}
+        .items-table th {{
+            background-color: #f8fafc;
+            border: 1px solid #cbd5e1;
+            padding: 10px 8px;
+            font-weight: 700;
+            color: #334155;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+        }}
+        .items-table td {{
+            border: 1px solid #cbd5e1;
+            padding: 10px 8px;
+            vertical-align: middle;
+        }}
+        .summary-section {{
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }}
+        .summary-left {{
+            width: 55%;
+        }}
+        .summary-right {{
+            width: 40%;
+        }}
         .totals-table {{
             width: 100%;
-            margin-top: 8px;
+            border-collapse: collapse;
+            font-size: 12px;
         }}
         .totals-table td {{
-            padding: 2px 0;
+            padding: 6px 0;
         }}
-        .totals-title {{
+        .totals-table td.label {{
+            color: #475569;
             text-align: right;
             padding-right: 15px;
         }}
-        .totals-val {{
+        .totals-table td.val {{
             text-align: right;
-            font-weight: bold;
+            font-weight: 600;
+            color: #0f172a;
         }}
-        .footer {{
-            margin-top: 20px;
+        .totals-table tr.grand-total td {{
+            border-top: 2px solid #cbd5e1;
+            border-bottom: 2px solid #cbd5e1;
+            padding: 10px 0;
+            font-size: 15px;
+            font-weight: 800;
+        }}
+        .totals-table tr.grand-total td.val {{
+            color: #0f172a;
+        }}
+        .bank-block {{
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 15px;
             font-size: 11px;
         }}
-        .print-btn {{
-            display: block;
-            width: 100%;
-            padding: 10px;
-            background: #000;
-            color: #fff;
+        .bank-title {{
+            font-weight: 700;
+            color: #334155;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 4px;
+        }}
+        .bank-details td {{
+            padding: 2px 0;
+        }}
+        .bank-details td.lbl {{
+            color: #64748b;
+            width: 35%;
+        }}
+        .bank-details td.val {{
+            font-weight: 600;
+            color: #334155;
+        }}
+        .terms-block {{
+            margin-top: 15px;
+            font-size: 11px;
+            color: #64748b;
+            line-height: 1.5;
+        }}
+        .signatory-block {{
+            margin-top: 40px;
+            text-align: right;
+            font-size: 12px;
+        }}
+        .footer-banner {{
+            background-color: #0f172a;
+            color: #ffffff;
+            border-top: 3px solid #eab308;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: auto;
+        }}
+        .print-bar {{
             text-align: center;
+            margin-bottom: 15px;
+        }}
+        .print-btn {{
+            padding: 10px 24px;
+            background: #0f172a;
+            color: white;
             border: none;
+            font-size: 14px;
             font-weight: bold;
+            border-radius: 6px;
             cursor: pointer;
-            margin-top: 20px;
-            border-radius: 4px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            font-family: sans-serif;
+            transition: background 0.2s;
+        }}
+        .print-btn:hover {{
+            background: #1e293b;
         }}
         @media print {{
-            .print-btn {{
-                display: none;
-            }}
             body {{
-                width: 100%;
+                background-color: #ffffff;
                 padding: 0;
+                margin: 0;
+            }}
+            .invoice-page {{
+                width: 100%;
+                min-height: 100%;
+                box-shadow: none;
+                margin: 0;
+                padding-bottom: 0;
+            }}
+            .print-bar {{
+                display: none !important;
             }}
         }}
     </style>
 </head>
 <body>
-    <div class="text-center header">
-        <div class="store-title">{invoice.location.name}</div>
-        <div style="font-size: 10px;">POS Receipt</div>
+    <div class="print-bar">
+        <button class="print-btn" onclick="window.print()">Print Invoice / Quotation</button>
     </div>
     
-    <div class="separator">- - - - - - - - - - - - - - - -</div>
-    
-    <div class="info-block">
-        <strong>Inv No:</strong> {invoice.invoice_number}<br/>
-        <strong>Date:</strong> {date_str}<br/>
-        <strong>Cashier:</strong> {invoice.user.name}
+    <div class="invoice-page">
+        <div class="header-banner">
+            <div class="header-container">
+                <div class="header-left">
+                    <div style="color: #eab308; font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;">Master of Security System</div>
+                    <div style="color: #fef08a; font-size: 13px; font-weight: 600; font-style: italic; margin-bottom: 4px;">Prop: Rupchand Sk</div>
+                    <div style="font-size: 12px; font-weight: 600; color: #ffffff; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.8px;">Government & General Order Supplier</div>
+                    <div style="font-size: 11px; color: #cbd5e1; font-weight: 500;">GST: 19KJEPS3322A1ZA &nbsp;|&nbsp; UDYAM-WB-13-0061558 &nbsp;|&nbsp; PAN: KJEPS3322A</div>
+                </div>
+                <div class="header-right">
+                    {"<img src='data:image/png;base64," + logo_base64 + "' class='logo-img' alt='Logo'>" if logo_base64 else ""}
+                </div>
+            </div>
+        </div>
+        
+        <div class="invoice-body">
+            <div class="info-section">
+                <div class="info-col-left">
+                    <div class="section-title">Estimate For / Billing To</div>
+                    <div class="customer-name">{cust_name}</div>
+                    <div class="customer-details">
+                        {"<div>" + cust_address + "</div>" if cust_address != "N/A" else ""}
+                        <div><strong>Contact:</strong> {cust_phone}</div>
+                        {"<div><strong>GSTIN:</strong> " + cust_gstin + "</div>" if cust_gstin != "N/A" else ""}
+                        {"<div><strong>State:</strong> " + cust_state + "</div>" if cust_state != "N/A" else ""}
+                    </div>
+                </div>
+                <div class="info-col-right">
+                    <div style="color: #0f172a; font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 800; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">Quotation</div>
+                    <table class="invoice-details-table">
+                        <tr>
+                            <td class="label">Estimate No:</td>
+                            <td class="val">{invoice.invoice_number}</td>
+                        </tr>
+                        <tr>
+                            <td class="label">Date:</td>
+                            <td class="val">{date_str}</td>
+                        </tr>
+                        <tr>
+                            <td class="label">Prepared By:</td>
+                            <td class="val">{invoice.user.name}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th style="width: 6%; text-align: center;">S/N</th>
+                        <th style="width: 52%; text-align: left;">Item name</th>
+                        <th style="width: 14%; text-align: center;">HSN/SAC</th>
+                        <th style="width: 8%; text-align: center;">Qty</th>
+                        <th style="width: 10%; text-align: right;">Price/Unit</th>
+                        <th style="width: 10%; text-align: right;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {items_html}
+                </tbody>
+            </table>
+            
+            <div class="summary-section">
+                <div class="summary-left">
+                    <div style="font-size: 11px; margin-bottom: 12px;">
+                        <strong style="color: #475569; text-transform: uppercase; font-size: 10px; display: block; margin-bottom: 4px;">Estimate Amount in Words:</strong>
+                        <span style="font-style: italic; font-weight: 700; color: #1e293b; font-size: 12px;">{amount_in_words}</span>
+                    </div>
+                    
+                    <div class="bank-block">
+                        <div class="bank-title">Bank Details</div>
+                        <table class="bank-details" style="width: 100%; border-collapse: collapse;">
+                            <tr>
+                                <td class="lbl">Account Name:</td>
+                                <td class="val">MASTER OF SECURITY SYSTEM</td>
+                            </tr>
+                            <tr>
+                                <td class="lbl">Bank Name:</td>
+                                <td class="val">STATE BANK OF INDIA, CHUNAKHALI</td>
+                            </tr>
+                            <tr>
+                                <td class="lbl">Account No:</td>
+                                <td class="val">00000042871592004</td>
+                            </tr>
+                            <tr>
+                                <td class="lbl">IFSC Code:</td>
+                                <td class="val">SBIN0015956</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <div class="terms-block">
+                        <strong style="color: #475569; text-transform: uppercase; font-size: 10px; display: block; margin-bottom: 2px;">Terms and Conditions:</strong>
+                        ALL Items under Cover have 1 year warranty from the date of Handover. ESTIMATE VALUES FOR ONE WEEK
+                    </div>
+                </div>
+                
+                <div class="summary-right">
+                    <table class="totals-table">
+                        <tr>
+                            <td class="label">Subtotal:</td>
+                            <td class="val">₹{invoice.subtotal:.2f}</td>
+                        </tr>
+                        <tr>
+                            <td class="label">Tax (GST):</td>
+                            <td class="val">₹{invoice.tax_amount:.2f}</td>
+                        </tr>
+                        <tr>
+                            <td class="label">Discount:</td>
+                            <td class="val">-₹{invoice.discount_amount:.2f}</td>
+                        </tr>
+                        <tr class="grand-total">
+                            <td class="label" style="font-weight: 800;">NET TOTAL:</td>
+                            <td class="val">₹{invoice.total_amount:.2f}</td>
+                        </tr>
+                    </table>
+                    
+                    <div class="signatory-block">
+                        <div style="color: #475569; font-weight: 600; font-size: 11px; margin-bottom: 50px;">For Master of Security System:</div>
+                        <div style="border-top: 1px solid #cbd5e1; display: inline-block; padding-top: 4px; font-weight: 700; color: #1e293b; width: 150px; text-align: center;">Authorized Signatory</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer-banner">
+            <div style="color: #ffffff; font-size: 11px; display: flex; align-items: center; max-width: 380px;">
+                <span style="color: #eab308; font-size: 14px; margin-right: 6px;">📍</span>Chunakhali Nimtala, Berhampore, Murshidabad, Pin-742149, West Bengal, India
+            </div>
+            <div style="color: #ffffff; font-size: 11px; text-align: right; line-height: 1.5;">
+                <div><span style="color: #eab308; font-size: 12px; margin-right: 4px;">📞</span>9064797437, 8436766325</div>
+                <div><span style="color: #eab308; font-size: 12px; margin-right: 4px;">✉️</span>mastermail8436@gmail.com</div>
+                <div><span style="color: #eab308; font-size: 12px; margin-right: 4px;">🌐</span>https://masterofsecuritysystem.com</div>
+            </div>
+        </div>
     </div>
-    
-    <div class="separator">- - - - - - - - - - - - - - - -</div>
-    
-    {cust_html}
-    
-    <table>
-        <tbody>
-            {items_html}
-        </tbody>
-    </table>
-    
-    <div class="separator">- - - - - - - - - - - - - - - -</div>
-    
-    <table class="totals-table">
-        <tr>
-            <td class="totals-title">Subtotal:</td>
-            <td class="totals-val">₹{invoice.subtotal:.2f}</td>
-        </tr>
-        <tr>
-            <td class="totals-title">Tax (GST):</td>
-            <td class="totals-val">₹{invoice.tax_amount:.2f}</td>
-        </tr>
-        <tr>
-            <td class="totals-title">Discount:</td>
-            <td class="totals-val">-₹{invoice.discount_amount:.2f}</td>
-        </tr>
-        <tr style="font-size: 14px; font-weight: bold;">
-            <td class="totals-title">NET TOTAL:</td>
-            <td class="totals-val">₹{invoice.total_amount:.2f}</td>
-        </tr>
-    </table>
-    
-    <div class="separator">- - - - - - - - - - - - - - - -</div>
-    
-    <div class="info-block">
-        <strong>Payment Mode:</strong> {invoice.payment_mode.upper()}
-    </div>
-    
-    <div class="text-center footer">
-        Thank You for Your Visit!<br/>
-        Please Come Again.
-    </div>
-
-    <button class="print-btn" onclick="window.print()">Print Receipt</button>
 </body>
 </html>
 """

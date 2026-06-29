@@ -18,7 +18,7 @@ class ApiEndpoints {
       return 'http://localhost:8000';
     }
     // Physical mobile device connects to the host machine's IP address
-    return 'http://192.168.0.120:8000';
+    return 'http://192.168.0.119:8000';
   }
 
   /// WebSocket URL for Socket.IO

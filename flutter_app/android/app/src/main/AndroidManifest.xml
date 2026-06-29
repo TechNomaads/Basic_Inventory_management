@@ -6,7 +6,7 @@
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
     <application
-        android:label="Inventory Manager"
+        android:label="Master of Security System"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

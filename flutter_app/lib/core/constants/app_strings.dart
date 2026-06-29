@@ -7,7 +7,7 @@ class AppStrings {
   AppStrings._();
 
   // ── App ────────────────────────────────────────────────────────
-  static const String appName = 'Inventory Manager';
+  static const String appName = 'Master of Security System';
   static const String appVersion = '1.0.0';
 
   // ── Auth ───────────────────────────────────────────────────────
