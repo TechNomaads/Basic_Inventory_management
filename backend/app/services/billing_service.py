@@ -527,15 +527,10 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
     logo_base64 = ""
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        logo_path = os.path.abspath(os.path.join(current_dir, "..", "..", "..", "frontend", "logo.png"))
+        logo_path = os.path.abspath(os.path.join(current_dir, "..", "assets", "logo.png"))
         if os.path.exists(logo_path):
             with open(logo_path, 'rb') as f:
                 logo_base64 = base64.b64encode(f.read()).decode('utf-8')
-        else:
-            fallback_path = "/Users/nikola/Downloads/inventory_management/Basic_Inventory_management/frontend/logo.png"
-            if os.path.exists(fallback_path):
-                with open(fallback_path, 'rb') as f:
-                    logo_base64 = base64.b64encode(f.read()).decode('utf-8')
     except Exception:
         pass
 
@@ -543,15 +538,10 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
     gem_logo_base64 = ""
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        gem_logo_path = os.path.abspath(os.path.join(current_dir, "..", "..", "..", "frontend", "gem_logo.png"))
+        gem_logo_path = os.path.abspath(os.path.join(current_dir, "..", "assets", "gem_logo.png"))
         if os.path.exists(gem_logo_path):
             with open(gem_logo_path, 'rb') as f:
                 gem_logo_base64 = base64.b64encode(f.read()).decode('utf-8')
-        else:
-            gem_fallback_path = "/Users/nikola/Downloads/inventory_management/Basic_Inventory_management/frontend/gem_logo.png"
-            if os.path.exists(gem_fallback_path):
-                with open(gem_fallback_path, 'rb') as f:
-                    gem_logo_base64 = base64.b64encode(f.read()).decode('utf-8')
     except Exception:
         pass
 
