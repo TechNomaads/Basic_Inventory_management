@@ -6,18 +6,25 @@ export PYTHONPATH=/app:$PYTHONPATH
 
 echo "🔄 Creating database tables..."
 python -c "
-import asyncio
+import asyncio, time
 from sqlalchemy.ext.asyncio import create_async_engine
 from app.core.config import settings
 from app.core.database import Base
-import app.models  # Import all models so Base.metadata knows about them
+import app.models
 
 async def create_tables():
-    engine = create_async_engine(settings.DATABASE_URL)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    await engine.dispose()
-    print('  ✅ Database tables created successfully')
+    for i in range(15):
+        try:
+            engine = create_async_engine(settings.DATABASE_URL)
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            await engine.dispose()
+            print('  ✅ Database tables created successfully')
+            return
+        except Exception as e:
+            print(f'  ⏳ Database connection attempt {i+1} failed. Retrying in 2s...')
+            await asyncio.sleep(2)
+    raise Exception('Could not connect to database after 15 attempts')
 
 asyncio.run(create_tables())
 "
