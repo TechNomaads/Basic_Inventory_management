@@ -604,7 +604,6 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
         subtitle_html = f'<div style="font-size: 12px; color: #cbd5e1; font-weight: 500; margin-top: 4px;">{comp_address}</div>'
     else:
         subtitle_html = """
-        <div style="color: #fef08a; font-size: 13px; font-weight: 600; font-style: italic; margin-bottom: 4px;">Prop: Rupchand Sk</div>
         <div style="font-size: 12px; font-weight: 600; color: #ffffff; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.8px;">Government & General Order Supplier</div>
         <div style="font-size: 11px; color: #cbd5e1; font-weight: 500;">GST: 19KJEPS3322A1ZA &nbsp;|&nbsp; UDYAM-WB-13-0061558 &nbsp;|&nbsp; PAN: KJEPS3322A</div>
         """
@@ -885,14 +884,18 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
 <body>
     <div class="invoice-page">
         <div class="header-banner">
-            <div class="header-container">
-                <div class="header-left">
-                    <div style="color: #eab308; font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;">{comp_name}</div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 20px;">
+                <!-- Left: Logo -->
+                <div style="width: 120px; flex-shrink: 0; text-align: left;">
+                    {"<img src='data:image/png;base64," + comp_logo_base64 + "' style='max-height: 60px; width: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));' alt='Logo'>" if comp_logo_base64 else ""}
+                </div>
+                <!-- Middle: Company Title & Details -->
+                <div style="flex: 1; text-align: center;">
+                    <div style="color: #eab308; font-family: 'Outfit', sans-serif; font-size: 24px; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;">{comp_name}</div>
                     {subtitle_html}
                 </div>
-                <div class="header-right">
-                    {"<img src='data:image/png;base64," + comp_logo_base64 + "' class='logo-img' alt='Logo'>" if comp_logo_base64 else ""}
-                </div>
+                <!-- Right spacer to balance center alignment -->
+                <div style="width: 120px; flex-shrink: 0;"></div>
             </div>
         </div>
         
