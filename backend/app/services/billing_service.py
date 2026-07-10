@@ -900,10 +900,8 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
                     <div style="color: #eab308; font-family: 'Outfit', sans-serif; font-size: 24px; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;">{comp_name}</div>
                     {subtitle_html}
                 </div>
-                <!-- Right: Company Logo -->
-                <div style="width: 120px; flex-shrink: 0; text-align: right;">
-                    {"<img src='data:image/png;base64," + comp_logo_base64 + "' style='max-height: 60px; width: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));' alt='Company Logo'>" if comp_logo_base64 else ""}
-                </div>
+                <!-- Right spacer to balance center alignment -->
+                <div style="width: 120px; flex-shrink: 0;"></div>
             </div>
         </div>
         
