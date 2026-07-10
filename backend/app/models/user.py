@@ -23,6 +23,7 @@ from sqlalchemy import (
     ForeignKey,
     String,
     text,
+    Text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -89,6 +90,10 @@ class UserModel(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     last_login: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    active_company_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("companies.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

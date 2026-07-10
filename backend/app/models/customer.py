@@ -13,7 +13,7 @@ Dependencies:
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Index, String, text, Numeric
+from sqlalchemy import DateTime, Index, String, text, Numeric, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -46,6 +46,8 @@ class CustomerModel(Base):
     overdue_amount: Mapped[float] = mapped_column(
         Numeric(12, 2), nullable=False, default=0.00, server_default="0.00"
     )
+    gst_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

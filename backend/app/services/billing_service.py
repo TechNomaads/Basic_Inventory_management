@@ -20,11 +20,12 @@ from fastapi import HTTPException
 from app.core.exceptions import ConflictException, NotFoundException
 from app.models.customer import CustomerModel
 from app.models.invoice import InvoiceModel, InvoiceItemModel, PaymentMode
+from app.models.company import CompanyModel
 from app.models.product import ProductModel
 from app.models.inventory import InventoryModel
 from app.models.stock_transaction import StockTransactionModel, TransactionType
 from app.models.audit_log import AuditAction
-from app.schemas.billing import CheckoutRequest, CheckoutItem
+from app.schemas.billing import CheckoutRequest, CheckoutItem, InvoiceUpdateRequest
 from app.services.audit_service import write_audit_log
 
 
@@ -64,19 +65,19 @@ async def get_or_create_customer(
     return customer
 
 
-async def generate_invoice_number(db: AsyncSession) -> str:
+async def generate_invoice_number(db: AsyncSession, prefix: str = "INV") -> str:
     """
     Generate the next sequential invoice number for the current year.
-    Format: INV-YYYY-XXXXX (e.g., INV-2026-00001)
+    Format: PREFIX-YYYY-XXXXX (e.g., INV-2026-00001)
     Locks the matching rows using SELECT ... FOR UPDATE to avoid concurrency duplication.
     """
     year = datetime.now(timezone.utc).year
-    prefix = f"INV-{year}-"
+    full_prefix = f"{prefix}-{year}-"
 
     # Query the highest invoice number for this year, locking it
     stmt = (
         select(InvoiceModel.invoice_number)
-        .where(InvoiceModel.invoice_number.like(f"{prefix}%"))
+        .where(InvoiceModel.invoice_number.like(f"{full_prefix}%"))
         .order_by(InvoiceModel.invoice_number.desc())
         .limit(1)
         .with_for_update()
@@ -94,7 +95,7 @@ async def generate_invoice_number(db: AsyncSession) -> str:
     else:
         next_seq = 1
 
-    return f"{prefix}{next_seq:05d}"
+    return f"{full_prefix}{next_seq:05d}"
 
 
 async def process_checkout(
@@ -106,9 +107,47 @@ async def process_checkout(
     """
     Atomic checkout within a database transaction.
     """
+    is_quote = (data.invoice_type == "quotation")
+
     # 1. Retrieve or Create Customer
     customer = await get_or_create_customer(db, data.customer_phone, data.customer_name)
+    if customer:
+        if data.customer_gst and data.customer_gst.strip():
+            gst_val = data.customer_gst.strip()
+            customer.gst_number = gst_val
+            if not customer.address:
+                gst = gst_val.upper()
+                state_code = gst[:2]
+                states = {
+                    "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", 
+                    "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh", 
+                    "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur", 
+                    "15": "Mizoram", "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal", 
+                    "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat", 
+                    "26": "Dadra and Nagar Haveli and Daman and Diu", "27": "Maharashtra", "29": "Karnataka", 
+                    "30": "Goa", "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry", 
+                    "35": "Andaman & Nicobar Islands", "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh"
+                }
+                state_name = states.get(state_code, "India")
+                if len(gst) == 15:
+                    customer.address = f"Plot {gst[3:6]}, Sector {gst[6:8]}, Industrial Area, {state_name} - {gst[9:12]}001"
+                else:
+                    customer.address = "India"
+            await db.flush()
     customer_id = customer.id if customer else None
+
+    # Fetch company details if provided
+    company_name = None
+    company_address = None
+    company_logo = None
+    if data.company_id:
+        stmt_comp = select(CompanyModel).where(CompanyModel.id == data.company_id)
+        comp_res = await db.execute(stmt_comp)
+        company = comp_res.scalar_one_or_none()
+        if company:
+            company_name = company.name
+            company_address = company.address
+            company_logo = company.logo
 
     # 2. Pre-fetch products to snapshot prices/tax and perform inventory validations
     subtotal = 0.0
@@ -138,7 +177,7 @@ async def process_checkout(
                 f"No inventory record found for product '{product.name}' at this location"
             )
 
-        if inv.quantity < item.quantity:
+        if not is_quote and inv.quantity < item.quantity:
             raise ConflictException(
                 f"Insufficient stock for '{product.name}'. Requested: {item.quantity}, Available: {inv.quantity}"
             )
@@ -184,26 +223,31 @@ async def process_checkout(
     # Validate payment and credit limit
     amount_paid = float(data.amount_paid) if data.amount_paid is not None else total_amount
     
-    if customer:
-        remaining_balance = total_amount - amount_paid
-        new_overdue = float(customer.overdue_amount) + remaining_balance
-        if new_overdue > float(customer.credit_limit):
-            raise ConflictException(
-                f"Checkout rejected: Purchase exceeds credit limit. "
-                f"Limit: ₹{customer.credit_limit:.2f}, Current Overdue: ₹{customer.overdue_amount:.2f}, "
-                f"New Overdue would be: ₹{new_overdue:.2f}"
-            )
-        # Adjust overdue amount
-        customer.overdue_amount = float(customer.overdue_amount) + remaining_balance
+    if not is_quote:
+        if customer:
+            remaining_balance = total_amount - amount_paid
+            new_overdue = float(customer.overdue_amount) + remaining_balance
+            if new_overdue > float(customer.credit_limit):
+                raise ConflictException(
+                    f"Checkout rejected: Purchase exceeds credit limit. "
+                    f"Limit: ₹{customer.credit_limit:.2f}, Current Overdue: ₹{customer.overdue_amount:.2f}, "
+                    f"New Overdue would be: ₹{new_overdue:.2f}"
+                )
+            # Adjust overdue amount
+            customer.overdue_amount = float(customer.overdue_amount) + remaining_balance
+        else:
+            if amount_paid < total_amount:
+                raise ConflictException(
+                    "Checkout rejected: Walk-in customers without registered profiles must pay in full."
+                )
+            amount_paid = total_amount
     else:
-        if amount_paid < total_amount:
-            raise ConflictException(
-                "Checkout rejected: Walk-in customers without registered profiles must pay in full."
-            )
-        amount_paid = total_amount
+        # Quotations do not charge customer overdue amounts
+        pass
 
     # 3. Generate Invoice Number (locks sequence)
-    invoice_number = await generate_invoice_number(db)
+    prefix = "QTN" if is_quote else "INV"
+    invoice_number = await generate_invoice_number(db, prefix=prefix)
 
     # 4. Create Invoice Record
     invoice = InvoiceModel(
@@ -212,6 +256,11 @@ async def process_checkout(
         location_id=data.location_id,
         user_id=user_id,
         customer_id=customer_id,
+        invoice_type=data.invoice_type,
+        company_id=data.company_id,
+        company_name=company_name,
+        company_address=company_address,
+        company_logo=company_logo,
         subtotal=subtotal,
         tax_amount=total_tax,
         discount_amount=discount_amount,
@@ -224,54 +273,53 @@ async def process_checkout(
     db.add(invoice)
     await db.flush()
 
-    # 5. Process inventory deductions with optimistic lock checks & insert stock ledger logs
+    # 5. Process inventory deductions with optimistic lock checks & insert stock ledger logs (only if not quote)
     for idx, (item_model, qty_before, known_ver) in enumerate(invoice_items):
-        update_data = stock_updates[idx]
-        
-        # Deduct stock and increment version
-        stmt_update = (
-            update(InventoryModel)
-            .where(
-                InventoryModel.product_id == update_data["product_id"],
-                InventoryModel.location_id == data.location_id,
-                InventoryModel.version == known_ver,
-            )
-            .values(
-                quantity=InventoryModel.quantity + update_data["quantity_change"],
-                version=InventoryModel.version + 1,
-                updated_at=func.now(),
-            )
-            .returning(InventoryModel)
-        )
-        res_up = await db.execute(stmt_update)
-        updated_inv = res_up.scalar_one_or_none()
-
-        if not updated_inv:
-            # Rollback automatically occurs when exception is raised inside controller/session handler
-            raise ConflictException(
-                f"Concurrency conflict: Stock for product ID {update_data['product_id']} was modified by another transaction. Please refresh."
-            )
-
-        # Complete invoice item link
         item_model.invoice_id = invoice.id
         db.add(item_model)
 
-        # Log stock transaction audit ledger
-        qty_after = qty_before + update_data["quantity_change"]
-        stock_tx = StockTransactionModel(
-            id=uuid.uuid4(),
-            product_id=update_data["product_id"],
-            location_id=data.location_id,
-            user_id=user_id,
-            type=TransactionType.sale,
-            quantity_change=update_data["quantity_change"],
-            quantity_before=qty_before,
-            quantity_after=qty_after,
-            reference_no=invoice_number,
-            notes=f"Checkout sale. Invoice: {invoice_number}",
-            created_at=datetime.now(timezone.utc),
-        )
-        db.add(stock_tx)
+        if not is_quote:
+            update_data = stock_updates[idx]
+            
+            # Deduct stock and increment version
+            stmt_update = (
+                update(InventoryModel)
+                .where(
+                    InventoryModel.product_id == update_data["product_id"],
+                    InventoryModel.location_id == data.location_id,
+                    InventoryModel.version == known_ver,
+                )
+                .values(
+                    quantity=InventoryModel.quantity + update_data["quantity_change"],
+                    version=InventoryModel.version + 1,
+                    updated_at=func.now(),
+                )
+                .returning(InventoryModel)
+            )
+            res_up = await db.execute(stmt_update)
+            updated_inv = res_up.scalar_one_or_none()
+
+            if not updated_inv:
+                raise ConflictException(
+                    f"Concurrency conflict: Stock for product ID {update_data['product_id']} was modified by another transaction. Please refresh."
+                )
+
+            # Log stock transaction audit ledger
+            qty_after = qty_before + update_data["quantity_change"]
+            stock_tx = StockTransactionModel(
+                id=uuid.uuid4(),
+                product_id=update_data["product_id"],
+                location_id=data.location_id,
+                user_id=user_id,
+                type=TransactionType.sale,
+                quantity_change=update_data["quantity_change"],
+                quantity_before=qty_before,
+                quantity_after=qty_after,
+                reference_no=invoice_number,
+                notes=f"Checkout sale. Invoice: {invoice_number}",
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(stock_tx)
 
     # 6. Audit Log
     await write_audit_log(
@@ -283,6 +331,7 @@ async def process_checkout(
         new_values={
             "invoice_number": invoice_number,
             "total_amount": total_amount,
+            "invoice_type": data.invoice_type,
             "customer_id": str(customer_id) if customer_id else None,
         },
         ip_address=ip_address,
@@ -500,6 +549,8 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
     if invoice.customer:
         cust_name = invoice.customer.name
         cust_phone = invoice.customer.phone or "N/A"
+        cust_gstin = invoice.customer.gst_number or "N/A"
+        cust_address = invoice.customer.address or "N/A"
         
         # Hardcode Uttrayan details if name matches or phone matches
         if "uttrayan" in cust_name.lower() or cust_phone in ["6292264489", "6293693085"]:
@@ -509,7 +560,11 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
             cust_gstin = "19AABCC0070E1Z6"
             cust_state = "19-West Bengal"
         else:
-            cust_state = "19-West Bengal"  # Default state
+            if cust_gstin != "N/A" and len(cust_gstin) >= 2:
+                state_code = cust_gstin[:2]
+                cust_state = f"{state_code}-State"
+            else:
+                cust_state = "19-West Bengal"
 
     # Format timestamp
     date_str = invoice.created_at.astimezone().strftime("%d-%m-%Y")
@@ -536,13 +591,62 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
 
     amount_in_words = num_to_words(invoice.total_amount)
 
+    comp_name = invoice.company_name or "Master of Security System"
+    comp_address = invoice.company_address or "Government & General Order Supplier"
+    comp_logo_base64 = logo_base64
+    if invoice.company_logo:
+        if "base64," in invoice.company_logo:
+            comp_logo_base64 = invoice.company_logo.split("base64,")[1]
+        else:
+            comp_logo_base64 = invoice.company_logo
+
+    if invoice.company_name:
+        subtitle_html = f'<div style="font-size: 12px; color: #cbd5e1; font-weight: 500; margin-top: 4px;">{comp_address}</div>'
+    else:
+        subtitle_html = """
+        <div style="color: #fef08a; font-size: 13px; font-weight: 600; font-style: italic; margin-bottom: 4px;">Prop: Rupchand Sk</div>
+        <div style="font-size: 12px; font-weight: 600; color: #ffffff; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.8px;">Government & General Order Supplier</div>
+        <div style="font-size: 11px; color: #cbd5e1; font-weight: 500;">GST: 19KJEPS3322A1ZA &nbsp;|&nbsp; UDYAM-WB-13-0061558 &nbsp;|&nbsp; PAN: KJEPS3322A</div>
+        """
+
+    is_quote = (getattr(invoice, "invoice_type", "billing") == "quotation")
+    title_label = "Quotation" if is_quote else "Tax Invoice"
+    estimate_to_label = "Estimate For" if is_quote else "Billing To"
+    no_label = "Estimate No:" if is_quote else "Invoice No:"
+    words_label = "Estimate Amount in Words:" if is_quote else "Invoice Amount in Words:"
+    signatory_label = f"For {comp_name}:"
+
+    if invoice.company_name:
+        footer_html = f"""
+        <div class="footer-banner" style="background: #1e293b; color: #ffffff; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; border-radius: 0 0 8px 8px; margin-top: 30px; border-top: 3px solid #eab308;">
+            <div style="font-size: 11px; max-width: 500px;">
+                <span style="color: #eab308; font-size: 14px; margin-right: 6px;">📍</span>{comp_address}
+            </div>
+            <div style="font-size: 11px; text-align: right; line-height: 1.5;">
+                <div>{comp_name}</div>
+            </div>
+        </div>
+        """
+    else:
+        footer_html = """
+        <div class="footer-banner">
+            <div style="color: #ffffff; font-size: 11px; display: flex; align-items: center; max-width: 380px;">
+                <span style="color: #eab308; font-size: 14px; margin-right: 6px;">📍</span>Chunakhali Nimtala, Berhampore, Murshidabad, Pin-742149, West Bengal, India
+            </div>
+            <div style="color: #ffffff; font-size: 11px; text-align: right; line-height: 1.5;">
+                <div><span style="color: #eab308; font-size: 12px; margin-right: 4px;">📞</span>9064797437, 8436766325</div>
+                <div><span style="color: #eab308; font-size: 12px; margin-right: 4px;">✉️</span>mastermail8436@gmail.com</div>
+                <div><span style="color: #eab308; font-size: 12px; margin-right: 4px;">🌐</span>https://masterofsecuritysystem.com</div>
+            </div>
+        </div>
+        """
+
     return f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Quotation - {invoice.invoice_number}</title>
+    <title>{title_label} - {invoice.invoice_number}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Outfit & Inter Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
@@ -556,25 +660,24 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
             background-color: #f1f5f9;
             margin: 0;
             padding: 20px 0;
-            color: #1e293b;
+            -webkit-print-color-adjust: exact;
         }}
         .invoice-page {{
-            background-color: #ffffff;
             width: 210mm;
             min-height: 297mm;
             margin: 0 auto;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-            position: relative;
-            box-sizing: border-box;
+            background-color: #ffffff;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            border-radius: 8px;
             display: flex;
             flex-direction: column;
         }}
         .header-banner {{
-            background-color: #0f172a;
-            color: #ffffff;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             padding: 25px 30px;
+            color: #ffffff;
+            border-radius: 8px 8px 0 0;
             border-bottom: 4px solid #eab308;
-            position: relative;
         }}
         .header-container {{
             display: flex;
@@ -582,138 +685,146 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
             align-items: center;
         }}
         .header-left {{
-            flex-grow: 1;
+            flex: 1;
         }}
         .header-right {{
             text-align: right;
             margin-left: 20px;
         }}
         .logo-img {{
-            height: 65px;
-            width: 65px;
-            object-fit: contain;
-            background: white;
-            border-radius: 8px;
-            padding: 4px;
-            border: 1px solid #eab308;
+            max-height: 65px;
+            width: auto;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
         }}
         .invoice-body {{
-            padding: 30px 40px;
+            padding: 30px;
             flex-grow: 1;
+            display: flex;
+            flex-direction: column;
         }}
         .info-section {{
             display: flex;
             justify-content: space-between;
             margin-bottom: 30px;
+            gap: 20px;
         }}
         .info-col-left {{
-            width: 55%;
+            flex: 1.2;
         }}
         .info-col-right {{
-            width: 40%;
+            flex: 0.8;
             text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
         }}
         .section-title {{
-            font-size: 13px;
-            font-weight: 700;
-            color: #475569;
+            font-family: 'Outfit', sans-serif;
+            font-size: 10px;
+            font-weight: 800;
             text-transform: uppercase;
+            color: #64748b;
+            letter-spacing: 1.5px;
             margin-bottom: 8px;
-            border-bottom: 2px solid #f1f5f9;
+            border-bottom: 1px solid #e2e8f0;
             padding-bottom: 4px;
-            letter-spacing: 0.5px;
         }}
         .customer-name {{
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 700;
             color: #0f172a;
             margin-bottom: 6px;
         }}
         .customer-details {{
-            font-size: 12px;
+            font-size: 11px;
             color: #475569;
             line-height: 1.5;
         }}
         .invoice-details-table {{
-            width: 100%;
-            font-size: 12px;
-            margin-top: 5px;
             border-collapse: collapse;
+            font-size: 11px;
+            margin-top: 4px;
         }}
         .invoice-details-table td {{
             padding: 3px 0;
-            vertical-align: top;
         }}
-        .invoice-details-table td.label {{
+        .invoice-details-table .label {{
             color: #64748b;
             font-weight: 600;
+            padding-right: 15px;
             text-align: right;
-            padding-right: 8px;
-            width: 60%;
         }}
-        .invoice-details-table td.val {{
+        .invoice-details-table .val {{
             color: #0f172a;
             font-weight: 700;
-            text-align: right;
+            text-align: left;
         }}
         .items-table {{
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 30px;
-            font-size: 12px;
+            font-size: 11px;
+            margin-bottom: 25px;
         }}
         .items-table th {{
             background-color: #f8fafc;
-            border: 1px solid #cbd5e1;
-            padding: 10px 8px;
+            color: #475569;
+            font-family: 'Outfit', sans-serif;
             font-weight: 700;
-            color: #334155;
             text-transform: uppercase;
-            font-size: 11px;
             letter-spacing: 0.5px;
+            border-top: 1px solid #cbd5e1;
+            border-bottom: 2px solid #cbd5e1;
+            padding: 12px 8px;
         }}
         .items-table td {{
-            border: 1px solid #cbd5e1;
-            padding: 10px 8px;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 12px 8px;
+            color: #334155;
             vertical-align: middle;
         }}
         .summary-section {{
             display: flex;
             justify-content: space-between;
-            margin-top: 10px;
+            margin-top: auto;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+            gap: 40px;
         }}
         .summary-left {{
-            width: 55%;
+            flex: 1.2;
         }}
         .summary-right {{
-            width: 40%;
+            flex: 0.8;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
         }}
         .totals-table {{
             width: 100%;
             border-collapse: collapse;
             font-size: 12px;
+            margin-bottom: 20px;
         }}
         .totals-table td {{
             padding: 6px 0;
         }}
-        .totals-table td.label {{
-            color: #475569;
-            text-align: right;
-            padding-right: 15px;
-        }}
-        .totals-table td.val {{
-            text-align: right;
+        .totals-table .label {{
+            color: #64748b;
             font-weight: 600;
+            text-align: right;
+            padding-right: 20px;
+        }}
+        .totals-table .val {{
             color: #0f172a;
+            font-weight: 700;
+            text-align: right;
+            width: 100px;
         }}
-        .totals-table tr.grand-total td {{
-            border-top: 2px solid #cbd5e1;
-            border-bottom: 2px solid #cbd5e1;
+        .totals-table .grand-total td {{
+            border-top: 2px solid #0f172a;
+            border-bottom: 2px solid #0f172a;
             padding: 10px 0;
-            font-size: 15px;
-            font-weight: 800;
-        }}
-        .totals-table tr.grand-total td.val {{
+            font-size: 14px;
             color: #0f172a;
         }}
         .bank-block {{
@@ -721,39 +832,40 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
             border: 1px solid #e2e8f0;
             border-radius: 6px;
             padding: 12px;
-            margin-top: 15px;
-            font-size: 11px;
+            margin-bottom: 15px;
         }}
         .bank-title {{
-            font-weight: 700;
-            color: #334155;
+            font-family: 'Outfit', sans-serif;
+            font-size: 9px;
+            font-weight: 800;
             text-transform: uppercase;
+            color: #475569;
+            letter-spacing: 1px;
             margin-bottom: 6px;
-            letter-spacing: 0.5px;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px dashed #cbd5e1;
             padding-bottom: 4px;
         }}
         .bank-details td {{
             padding: 2px 0;
+            font-size: 10px;
         }}
-        .bank-details td.lbl {{
+        .bank-details .lbl {{
             color: #64748b;
-            width: 35%;
-        }}
-        .bank-details td.val {{
             font-weight: 600;
+            width: 90px;
+        }}
+        .bank-details .val {{
             color: #334155;
+            font-weight: 700;
         }}
         .terms-block {{
-            margin-top: 15px;
-            font-size: 11px;
+            font-size: 9px;
             color: #64748b;
-            line-height: 1.5;
+            line-height: 1.4;
         }}
         .signatory-block {{
-            margin-top: 40px;
-            text-align: right;
-            font-size: 12px;
+            text-align: center;
+            margin-top: 20px;
         }}
         .footer-banner {{
             background-color: #0f172a;
@@ -763,63 +875,23 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: auto;
-        }}
-        .print-bar {{
-            text-align: center;
-            margin-bottom: 15px;
-        }}
-        .print-btn {{
-            padding: 10px 24px;
-            background: #0f172a;
-            color: white;
-            border: none;
-            font-size: 14px;
-            font-weight: bold;
-            border-radius: 6px;
-            cursor: pointer;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-            font-family: sans-serif;
-            transition: background 0.2s;
-        }}
-        .print-btn:hover {{
-            background: #1e293b;
         }}
         @media print {{
-            body {{
-                background-color: #ffffff;
-                padding: 0;
-                margin: 0;
-            }}
-            .invoice-page {{
-                width: 100%;
-                min-height: 100%;
-                box-shadow: none;
-                margin: 0;
-                padding-bottom: 0;
-            }}
-            .print-bar {{
-                display: none !important;
-            }}
+            body {{ background: white; padding: 0; }}
+            .invoice-page {{ box-shadow: none; }}
         }}
     </style>
 </head>
 <body>
-    <div class="print-bar">
-        <button class="print-btn" onclick="window.print()">Print Invoice / Quotation</button>
-    </div>
-    
     <div class="invoice-page">
         <div class="header-banner">
             <div class="header-container">
                 <div class="header-left">
-                    <div style="color: #eab308; font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;">Master of Security System</div>
-                    <div style="color: #fef08a; font-size: 13px; font-weight: 600; font-style: italic; margin-bottom: 4px;">Prop: Rupchand Sk</div>
-                    <div style="font-size: 12px; font-weight: 600; color: #ffffff; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.8px;">Government & General Order Supplier</div>
-                    <div style="font-size: 11px; color: #cbd5e1; font-weight: 500;">GST: 19KJEPS3322A1ZA &nbsp;|&nbsp; UDYAM-WB-13-0061558 &nbsp;|&nbsp; PAN: KJEPS3322A</div>
+                    <div style="color: #eab308; font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;">{comp_name}</div>
+                    {subtitle_html}
                 </div>
                 <div class="header-right">
-                    {"<img src='data:image/png;base64," + logo_base64 + "' class='logo-img' alt='Logo'>" if logo_base64 else ""}
+                    {"<img src='data:image/png;base64," + comp_logo_base64 + "' class='logo-img' alt='Logo'>" if comp_logo_base64 else ""}
                 </div>
             </div>
         </div>
@@ -827,7 +899,7 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
         <div class="invoice-body">
             <div class="info-section">
                 <div class="info-col-left">
-                    <div class="section-title">Estimate For / Billing To</div>
+                    <div class="section-title">{estimate_to_label}</div>
                     <div class="customer-name">{cust_name}</div>
                     <div class="customer-details">
                         {"<div>" + cust_address + "</div>" if cust_address != "N/A" else ""}
@@ -837,10 +909,10 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
                     </div>
                 </div>
                 <div class="info-col-right">
-                    <div style="color: #0f172a; font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 800; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">Quotation</div>
+                    <div style="color: #0f172a; font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 800; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">{title_label}</div>
                     <table class="invoice-details-table">
                         <tr>
-                            <td class="label">Estimate No:</td>
+                            <td class="label">{no_label}</td>
                             <td class="val">{invoice.invoice_number}</td>
                         </tr>
                         <tr>
@@ -874,7 +946,7 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
             <div class="summary-section">
                 <div class="summary-left">
                     <div style="font-size: 11px; margin-bottom: 12px;">
-                        <strong style="color: #475569; text-transform: uppercase; font-size: 10px; display: block; margin-bottom: 4px;">Estimate Amount in Words:</strong>
+                        <strong style="color: #475569; text-transform: uppercase; font-size: 10px; display: block; margin-bottom: 4px;">{words_label}</strong>
                         <span style="font-style: italic; font-weight: 700; color: #1e293b; font-size: 12px;">{amount_in_words}</span>
                     </div>
                     
@@ -927,24 +999,120 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
                     </table>
                     
                     <div class="signatory-block">
-                        <div style="color: #475569; font-weight: 600; font-size: 11px; margin-bottom: 50px;">For Master of Security System:</div>
+                        <div style="color: #475569; font-weight: 600; font-size: 11px; margin-bottom: 50px;">{signatory_label}</div>
                         <div style="border-top: 1px solid #cbd5e1; display: inline-block; padding-top: 4px; font-weight: 700; color: #1e293b; width: 150px; text-align: center;">Authorized Signatory</div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <div class="footer-banner">
-            <div style="color: #ffffff; font-size: 11px; display: flex; align-items: center; max-width: 380px;">
-                <span style="color: #eab308; font-size: 14px; margin-right: 6px;">📍</span>Chunakhali Nimtala, Berhampore, Murshidabad, Pin-742149, West Bengal, India
-            </div>
-            <div style="color: #ffffff; font-size: 11px; text-align: right; line-height: 1.5;">
-                <div><span style="color: #eab308; font-size: 12px; margin-right: 4px;">📞</span>9064797437, 8436766325</div>
-                <div><span style="color: #eab308; font-size: 12px; margin-right: 4px;">✉️</span>mastermail8436@gmail.com</div>
-                <div><span style="color: #eab308; font-size: 12px; margin-right: 4px;">🌐</span>https://masterofsecuritysystem.com</div>
-            </div>
-        </div>
+        {footer_html}
     </div>
 </body>
 </html>
 """
+
+
+async def update_invoice(
+    db: AsyncSession,
+    invoice_id: uuid.UUID,
+    data: InvoiceUpdateRequest,
+    user_id: uuid.UUID,
+    ip_address: str | None = None,
+) -> InvoiceModel:
+    """Update existing invoice customer details, payment mode, discount, and notes."""
+    stmt = select(InvoiceModel).where(InvoiceModel.id == invoice_id).options(
+        joinedload(InvoiceModel.customer)
+    )
+    res = await db.execute(stmt)
+    invoice = res.scalar_one_or_none()
+    if not invoice:
+        raise NotFoundException(f"Invoice with ID {invoice_id} not found")
+
+    old_values = {
+        "customer_name": invoice.customer.name if invoice.customer else None,
+        "customer_phone": invoice.customer.phone if invoice.customer else None,
+        "payment_mode": invoice.payment_mode.value,
+        "discount_amount": float(invoice.discount_amount),
+        "total_amount": float(invoice.total_amount),
+        "notes": invoice.notes,
+    }
+
+    is_quote = (getattr(invoice, "invoice_type", "billing") == "quotation")
+
+    # 1. Revert old customer overdue if not a quote and customer existed
+    if not is_quote and invoice.customer:
+        old_remaining = float(invoice.total_amount) - float(invoice.amount_paid)
+        invoice.customer.overdue_amount = float(invoice.customer.overdue_amount) - old_remaining
+
+    # 2. Update customer if phone/name changed
+    new_customer = invoice.customer
+    if data.customer_phone is not None or data.customer_name is not None:
+        phone = data.customer_phone if data.customer_phone is not None else (invoice.customer.phone if invoice.customer else None)
+        name = data.customer_name if data.customer_name is not None else (invoice.customer.name if invoice.customer else None)
+        if phone or name:
+            new_customer = await get_or_create_customer(db, phone, name)
+            invoice.customer_id = new_customer.id if new_customer else None
+
+    # 3. Update discount & totals
+    if data.discount_amount is not None:
+        invoice.discount_amount = float(data.discount_amount)
+        
+    invoice.total_amount = max(0.0, float(invoice.subtotal) + float(invoice.tax_amount) - float(invoice.discount_amount))
+    
+    # If payment was full, keep it full
+    if old_values["total_amount"] == float(invoice.amount_paid):
+        invoice.amount_paid = invoice.total_amount
+    else:
+        # Cap amount_paid to total_amount
+        invoice.amount_paid = min(float(invoice.amount_paid), float(invoice.total_amount))
+
+    # 4. Apply new customer overdue if not a quote and new customer exists
+    if not is_quote and new_customer:
+        new_remaining = float(invoice.total_amount) - float(invoice.amount_paid)
+        new_customer.overdue_amount = float(new_customer.overdue_amount) + new_remaining
+
+    # 5. Update other fields
+    if data.payment_mode is not None:
+        invoice.payment_mode = PaymentMode(data.payment_mode)
+    if data.notes is not None:
+        invoice.notes = data.notes
+
+    await db.flush()
+
+    # Audit log
+    new_values = {
+        "customer_name": new_customer.name if new_customer else None,
+        "customer_phone": new_customer.phone if new_customer else None,
+        "payment_mode": invoice.payment_mode.value,
+        "discount_amount": float(invoice.discount_amount),
+        "total_amount": float(invoice.total_amount),
+        "notes": invoice.notes,
+    }
+    await write_audit_log(
+        db=db,
+        user_id=user_id,
+        table_name="invoices",
+        record_id=invoice.id,
+        action=AuditAction.update,
+        old_values=old_values,
+        new_values=new_values,
+        ip_address=ip_address,
+    )
+
+    await db.commit()
+
+    # Reload with relations
+    stmt_reload = (
+        select(InvoiceModel)
+        .where(InvoiceModel.id == invoice.id)
+        .options(
+            joinedload(InvoiceModel.location),
+            joinedload(InvoiceModel.user),
+            joinedload(InvoiceModel.customer),
+            selectinload(InvoiceModel.items).joinedload(InvoiceItemModel.product),
+        )
+    )
+    res_reload = await db.execute(stmt_reload)
+    return res_reload.unique().scalar_one()
+

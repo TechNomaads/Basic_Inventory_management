@@ -10,9 +10,20 @@ async def alter_tables():
         # Add credit_limit and overdue_amount to customers
         await conn.execute(text("ALTER TABLE customers ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(12, 2) NOT NULL DEFAULT 10000.00"))
         await conn.execute(text("ALTER TABLE customers ADD COLUMN IF NOT EXISTS overdue_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00"))
+        await conn.execute(text("ALTER TABLE customers ADD COLUMN IF NOT EXISTS gst_number VARCHAR(50) NULL"))
+        await conn.execute(text("ALTER TABLE customers ADD COLUMN IF NOT EXISTS address TEXT NULL"))
+        
+        # Add address and active_company_id to users
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT NULL"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_company_id UUID NULL REFERENCES companies(id) ON DELETE SET NULL"))
         
         # Add amount_paid to invoices
         await conn.execute(text("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS amount_paid NUMERIC(12, 2) NOT NULL DEFAULT 0.00"))
+        await conn.execute(text("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_type VARCHAR(50) NOT NULL DEFAULT 'billing'"))
+        await conn.execute(text("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS company_id UUID NULL REFERENCES companies(id) ON DELETE SET NULL"))
+        await conn.execute(text("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS company_name VARCHAR(150) NULL"))
+        await conn.execute(text("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS company_address TEXT NULL"))
+        await conn.execute(text("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS company_logo TEXT NULL"))
         
         print("  ✅ Columns checked and added successfully")
     await engine.dispose()

@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import auth, audit, inventory, pending, products, reports, users, billing, customers
+from app.routers import auth, audit, inventory, pending, products, reports, users, billing, customers, profile
 from app.sockets.events import socket_app
 
 
@@ -55,6 +55,7 @@ def create_app() -> FastAPI:
     application.include_router(audit.router)
     application.include_router(billing.router)
     application.include_router(customers.router)
+    application.include_router(profile.router)
 
 
     # ── Mount Socket.IO ──────────────────────────────────────────

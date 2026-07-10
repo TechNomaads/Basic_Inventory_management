@@ -22,6 +22,7 @@ class CustomerLookupResponse(BaseModel):
     phone: str | None = None
     credit_limit: float
     overdue_amount: float
+    gst_number: str | None = None
 
     class Config:
         from_attributes = True
@@ -49,6 +50,9 @@ class CheckoutRequest(BaseModel):
     notes: str | None = Field(default=None, max_length=500)
     customer_name: str | None = Field(default=None, max_length=150)
     customer_phone: str | None = Field(default=None, max_length=50)
+    customer_gst: str | None = Field(default=None, max_length=50)
+    invoice_type: str = Field(default="billing")
+    company_id: UUID | None = Field(default=None)
     items: list[CheckoutItem] = Field(..., min_items=1, description="Cart must contain at least one item")
 
 
@@ -85,6 +89,11 @@ class InvoiceResponse(BaseModel):
     customer_id: UUID | None = None
     customer_name: str | None = None
     customer_phone: str | None = None
+    invoice_type: str
+    company_id: UUID | None = None
+    company_name: str | None = None
+    company_address: str | None = None
+    company_logo: str | None = None
     subtotal: float
     tax_amount: float
     discount_amount: float
@@ -107,6 +116,8 @@ class InvoiceSummaryItem(BaseModel):
     user_name: str
     customer_name: str | None = None
     customer_phone: str | None = None
+    invoice_type: str
+    company_name: str | None = None
     subtotal: float
     tax_amount: float
     discount_amount: float
@@ -124,3 +135,12 @@ class SalesSummaryResponse(BaseModel):
     total_sales_today: int
     revenue_today: float
     profit_today: float
+
+
+class InvoiceUpdateRequest(BaseModel):
+    customer_name: str | None = Field(default=None)
+    customer_phone: str | None = Field(default=None)
+    payment_mode: str | None = Field(default=None)
+    discount_amount: float | None = Field(default=None)
+    notes: str | None = Field(default=None)
+

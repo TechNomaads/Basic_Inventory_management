@@ -9,6 +9,8 @@ class CustomerResponse(BaseModel):
     phone: str | None = None
     credit_limit: float
     overdue_amount: float
+    gst_number: str | None = None
+    address: str | None = None
     created_at: datetime
 
     class Config:
@@ -19,12 +21,16 @@ class CustomerCreateRequest(BaseModel):
     phone: str | None = Field(default=None, max_length=50)
     credit_limit: float | None = Field(default=10000.00, ge=0.0)
     overdue_amount: float | None = Field(default=0.00)
+    gst_number: str | None = Field(default=None, max_length=50)
+    address: str | None = Field(default=None)
 
 class CustomerUpdateRequest(BaseModel):
     name: str | None = Field(default=None, max_length=150)
     phone: str | None = Field(default=None, max_length=50)
     credit_limit: float | None = Field(default=None, ge=0.0)
     overdue_amount: float | None = Field(default=None)
+    gst_number: str | None = Field(default=None, max_length=50)
+    address: str | None = Field(default=None)
 
 class CustomerDetailResponse(CustomerResponse):
     invoices: list[InvoiceSummaryItem] = []

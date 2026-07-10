@@ -115,6 +115,115 @@ function bindEvents() {
     document.getElementById('tx-form').addEventListener('submit', handleTransactionSubmit);
     document.getElementById('adjustment-form').addEventListener('submit', handleAdjustmentSubmit);
     document.getElementById('customer-form').addEventListener('submit', handleCustomerSubmit);
+    document.getElementById('profile-form').addEventListener('submit', handleProfileSubmit);
+    document.getElementById('company-form').addEventListener('submit', handleCompanySubmit);
+    document.getElementById('category-manager-form').addEventListener('submit', handleCategoryManagerSubmit);
+    document.getElementById('edit-invoice-form').addEventListener('submit', handleEditInvoiceSubmit);
+
+    // Profile & Company buttons
+    document.getElementById('btn-add-company').addEventListener('click', () => {
+        document.getElementById('company-modal-title').textContent = 'Add Company';
+        document.getElementById('company-id').value = '';
+        document.getElementById('company-name').value = '';
+        document.getElementById('company-address').value = '';
+        document.getElementById('company-logo-base64').value = '';
+        document.getElementById('company-logo-preview').src = 'logo.png';
+        document.getElementById('company-logo-file').value = '';
+        document.getElementById('company-error').classList.add('hidden');
+        openModal('company-modal');
+    });
+
+    document.getElementById('company-logo-file').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const base64 = event.target.result;
+            document.getElementById('company-logo-base64').value = base64;
+            document.getElementById('company-logo-preview').src = base64;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    // Category Manager modal trigger
+    document.getElementById('btn-manage-categories').addEventListener('click', () => {
+        loadCategoryManagerList();
+        openModal('category-manager-modal');
+    });
+
+    // Edit Invoice modal trigger
+    document.getElementById('btn-edit-invoice').addEventListener('click', openEditInvoiceModal);
+
+    // GST autofill listener
+    const customerGst = document.getElementById('customer-gst');
+    if (customerGst) {
+        customerGst.addEventListener('input', async (e) => {
+            const gst = e.target.value.trim().toUpperCase();
+            if (gst.length === 15) {
+                try {
+                    const res = await fetchWithAuth(`${API_URL}/api/v1/customers/gst-lookup?gst_number=${gst}`);
+                    if (res && res.address) {
+                        document.getElementById('customer-address').value = res.address;
+                        document.getElementById('gst-address-text').textContent = res.address;
+                        document.getElementById('gst-address-card').classList.remove('hidden');
+                    }
+                } catch (err) {
+                    console.error("GST lookup failed:", err);
+                }
+            } else {
+                document.getElementById('gst-address-card').classList.add('hidden');
+            }
+        });
+    }
+
+    // Manage Locations Modal trigger
+    const btnManageLocations = document.getElementById('btn-manage-locations');
+    if (btnManageLocations) {
+        btnManageLocations.addEventListener('click', () => {
+            loadManageLocationsList();
+            openModal('locations-modal');
+        });
+    }
+
+    // Location create form submit
+    const locationCreateForm = document.getElementById('location-create-form');
+    if (locationCreateForm) {
+        locationCreateForm.addEventListener('submit', handleLocationCreateSubmit);
+    }
+
+    // POS GST input listener to set state
+    const posCustomerGst = document.getElementById('pos-customer-gst');
+    if (posCustomerGst) {
+        posCustomerGst.addEventListener('input', (e) => {
+            state.cart.customer_gst = e.target.value;
+        });
+    }
+
+    // Floating WhatsApp button trigger
+    const floatingWhatsappBtn = document.getElementById('floating-whatsapp-btn');
+    if (floatingWhatsappBtn) {
+        floatingWhatsappBtn.addEventListener('click', openWhatsAppModal);
+    }
+
+    // WhatsApp Message Template change
+    const waMessageTemplate = document.getElementById('wa-message-template');
+    if (waMessageTemplate) {
+        waMessageTemplate.addEventListener('change', handleWaTemplateChange);
+    }
+
+    // Search contacts filter
+    const waSearchContacts = document.getElementById('wa-search-contacts');
+    if (waSearchContacts) {
+        waSearchContacts.addEventListener('input', (e) => {
+            filterWaContacts(e.target.value.trim().toLowerCase());
+        });
+    }
+
+    // WhatsApp Send Form
+    const waSendForm = document.getElementById('wa-send-form');
+    if (waSendForm) {
+        waSendForm.addEventListener('submit', handleWaSimulateSend);
+    }
 
     // Customer Tab Bindings
     const customersSearch = document.getElementById('customers-search');
@@ -403,6 +512,7 @@ function showApp() {
 
     // Populate metadata
     loadMetadata();
+    loadUserProfileAndBranding();
 
     // Default tab
     switchTab('dashboard');
@@ -433,7 +543,8 @@ function switchTab(tabName) {
         'pending': 'Pending Adjustments Approval',
         'audit': 'System Audit Logs',
         'sales': 'Sales Invoice History',
-        'customers': 'Customer Directory'
+        'customers': 'Customer Directory',
+        'profile': 'Profile & Company Settings'
     };
     document.getElementById('current-tab-title').textContent = titleMap[tabName] || 'Dashboard';
 
@@ -463,6 +574,8 @@ function switchTab(tabName) {
         loadSalesData();
     } else if (tabName === 'customers') {
         loadCustomersData();
+    } else if (tabName === 'profile') {
+        loadProfileTab();
     }
 }
 
@@ -503,6 +616,9 @@ async function loadMetadata() {
         // Populate supplier selectors
         const prodSup = document.getElementById('prod-supplier');
         prodSup.innerHTML = sups.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+
+        // Populate POS companies select list
+        populatePOSCompanies();
 
     } catch (err) {
         console.error('Error loading metadata:', err);
@@ -610,6 +726,9 @@ async function loadCustomersData() {
                             <button class="action-btn" style="color: var(--color-primary);" onclick="window.showCustomerHistory('${c.id}')" title="Purchase History">
                                 <i data-lucide="history" style="width: 16px; height: 16px;"></i>
                             </button>
+                            <button class="action-btn" style="color: var(--color-danger);" onclick="window.deleteCustomer('${c.id}')" title="Delete Customer">
+                                <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                            </button>
                         </div>
                     </td>
                 </tr>
@@ -640,6 +759,7 @@ function openCustomerModal(customerId = null) {
     
     const form = document.getElementById('customer-form');
     form.reset();
+    document.getElementById('gst-address-card').classList.add('hidden');
     
     if (customerId) {
         document.getElementById('customer-modal-title').textContent = 'Edit Customer Profile';
@@ -650,6 +770,13 @@ function openCustomerModal(customerId = null) {
                 document.getElementById('customer-phone').value = c.phone || '';
                 document.getElementById('customer-credit-limit').value = c.credit_limit.toFixed(2);
                 document.getElementById('customer-overdue').value = c.overdue_amount.toFixed(2);
+                document.getElementById('customer-gst').value = c.gst_number || '';
+                document.getElementById('customer-address').value = c.address || '';
+                
+                if (c.gst_number) {
+                    document.getElementById('gst-address-text').textContent = c.address || '';
+                    document.getElementById('gst-address-card').classList.remove('hidden');
+                }
                 
                 openModal('customer-modal');
                 lucide.createIcons();
@@ -662,6 +789,8 @@ function openCustomerModal(customerId = null) {
         document.getElementById('customer-id').value = '';
         document.getElementById('customer-credit-limit').value = '10000.00';
         document.getElementById('customer-overdue').value = '0.00';
+        document.getElementById('customer-gst').value = '';
+        document.getElementById('customer-address').value = '';
         openModal('customer-modal');
         lucide.createIcons();
     }
@@ -678,7 +807,9 @@ async function handleCustomerSubmit(e) {
         name: document.getElementById('customer-name').value.trim(),
         phone: document.getElementById('customer-phone').value.trim() || null,
         credit_limit: parseFloat(document.getElementById('customer-credit-limit').value) || 0.0,
-        overdue_amount: parseFloat(document.getElementById('customer-overdue').value) || 0.0
+        overdue_amount: parseFloat(document.getElementById('customer-overdue').value) || 0.0,
+        gst_number: document.getElementById('customer-gst').value.trim() || null,
+        address: document.getElementById('customer-address').value.trim() || null
     };
 
     try {
@@ -700,6 +831,20 @@ async function handleCustomerSubmit(e) {
     } catch (err) {
         errorText.textContent = err.message || 'An error occurred while saving customer profile.';
         errorEl.classList.remove('hidden');
+    }
+}
+
+async function deleteCustomer(id) {
+    if (!confirm("Are you sure you want to delete this customer? This action cannot be undone.")) {
+        return;
+    }
+    try {
+        await fetchWithAuth(`${API_URL}/api/v1/customers/${id}`, {
+            method: 'DELETE'
+        });
+        loadCustomersData();
+    } catch (err) {
+        alert(`Error deleting customer: ${err.message}`);
     }
 }
 
@@ -1518,6 +1663,7 @@ async function initBillingTab() {
         items: [],
         customer_name: '',
         customer_phone: '',
+        customer_gst: '',
         customer_credit_limit: null,
         customer_overdue_amount: null,
         amount_paid_edited: false,
@@ -1529,6 +1675,7 @@ async function initBillingTab() {
     // 2. Clear inputs in checkout panel
     document.getElementById('pos-customer-phone').value = '';
     document.getElementById('pos-customer-name').value = '';
+    document.getElementById('pos-customer-gst').value = '';
     document.getElementById('pos-notes').value = '';
     document.getElementById('pos-bill-discount').value = '0.00';
     document.getElementById('pos-product-search').value = '';
@@ -1840,9 +1987,11 @@ async function handleCustomerPhoneLookup(e) {
     if (phone.length === 0) {
         state.cart.customer_name = '';
         state.cart.customer_phone = '';
+        state.cart.customer_gst = '';
         state.cart.customer_credit_limit = null;
         state.cart.customer_overdue_amount = null;
         document.getElementById('pos-customer-name').value = '';
+        document.getElementById('pos-customer-gst').value = '';
         document.getElementById('pos-customer-credit-info').classList.add('hidden');
         document.getElementById('pos-credit-warning').classList.add('hidden');
         recalculateAmountPaidAndValidate();
@@ -1854,8 +2003,10 @@ async function handleCustomerPhoneLookup(e) {
     try {
         const customer = await fetchWithAuth(`${API_URL}/api/v1/billing/customers/lookup?phone=${phone}`);
         document.getElementById('pos-customer-name').value = customer.name;
+        document.getElementById('pos-customer-gst').value = customer.gst_number || '';
         state.cart.customer_name = customer.name;
         state.cart.customer_phone = customer.phone;
+        state.cart.customer_gst = customer.gst_number || '';
         state.cart.customer_credit_limit = customer.credit_limit;
         state.cart.customer_overdue_amount = customer.overdue_amount;
         
@@ -1873,6 +2024,8 @@ async function handleCustomerPhoneLookup(e) {
         console.log('Customer phone lookup: not found or error', err);
         state.cart.customer_credit_limit = null;
         state.cart.customer_overdue_amount = null;
+        state.cart.customer_gst = '';
+        document.getElementById('pos-customer-gst').value = '';
         document.getElementById('pos-customer-credit-info').classList.add('hidden');
         document.getElementById('pos-credit-warning').classList.add('hidden');
         recalculateAmountPaidAndValidate();
@@ -1968,6 +2121,9 @@ async function submitPosCheckout() {
         notes: document.getElementById('pos-notes').value || null,
         customer_name: document.getElementById('pos-customer-name').value || null,
         customer_phone: document.getElementById('pos-customer-phone').value || null,
+        customer_gst: document.getElementById('pos-customer-gst').value.trim() || null,
+        invoice_type: document.getElementById('pos-invoice-type').value,
+        company_id: document.getElementById('pos-company-select').value || null,
         items: state.cart.items.map(item => ({
             product_id: item.product_id,
             quantity: item.quantity,
@@ -2019,6 +2175,7 @@ window.editCustomer = openCustomerModal;
 window.showCustomerHistory = showCustomerHistory;
 window.loadCustomersData = loadCustomersData;
 window.openCustomerModal = openCustomerModal;
+window.deleteCustomer = deleteCustomer;
 
 // ── BARCODE SCANNER CONTROLLER & SERVICE ──
 const ScannerService = {
@@ -2923,5 +3080,767 @@ function drawHourlySalesChart(invoices) {
         </svg>
     `;
 }
+
+function drawCustomersDebtDonutChart(debtorsCount, debtFree) {
+    const total = debtorsCount + debtFree;
+    const debtorsPercent = total > 0 ? (debtorsCount / total) * 100 : 0;
+    const debtFreePercent = total > 0 ? (debtFree / total) * 100 : 0;
+
+    const r = 55;
+    const cx = 110;
+    const cy = 110;
+    const C = 2 * Math.PI * r;
+
+    const debtorsStroke = (debtorsPercent / 100) * C;
+    const debtFreeStroke = (debtFreePercent / 100) * C;
+
+    const debtorsOffset = C;
+    const debtFreeOffset = C - debtorsStroke;
+
+    return `
+        <div style="display: flex; align-items: center; justify-content: center; gap: 40px; flex-wrap: wrap; width: 100%; padding: 10px;">
+            <svg width="220" height="220" viewBox="0 0 220 220" style="transform: rotate(-90deg);">
+                <!-- Background Circle -->
+                <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--border-color)" stroke-width="20" />
+                
+                <!-- Debtors Segment (Orange-Red) -->
+                ${debtorsStroke > 0 ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#ef4444" stroke-width="20"
+                    stroke-dasharray="${debtorsStroke} ${C - debtorsStroke}" 
+                    stroke-dashoffset="${debtorsOffset}" 
+                    style="transition: stroke-dashoffset 0.6s ease;"/>` : ''}
+                
+                <!-- Debt-Free Segment (Green) -->
+                ${debtFreeStroke > 0 ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#10b981" stroke-width="20"
+                    stroke-dasharray="${debtFreeStroke} ${C - debtFreeStroke}" 
+                    stroke-dashoffset="${debtFreeOffset}"
+                    style="transition: stroke-dashoffset 0.6s ease;"/>` : ''}
+                
+                <!-- Center Text -->
+                <g style="transform: rotate(90deg); transform-origin: center;">
+                    <text x="${cx}" y="${cy - 5}" text-anchor="middle" font-size="14" font-weight="bold" fill="var(--text-primary)">Debtors</text>
+                    <text x="${cx}" y="${cy + 15}" text-anchor="middle" font-size="16" font-weight="800" fill="#ef4444">${((debtorsPercent)).toFixed(0)}%</text>
+                </g>
+            </svg>
+            
+            <div style="display: flex; flex-direction: column; gap: 12px; min-width: 150px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="width: 14px; height: 14px; background: #ef4444; border-radius: 4px; display: inline-block;"></span>
+                    <div>
+                        <span style="font-size: 13px; font-weight: 600; display: block; color: var(--text-primary);">Active Debtors</span>
+                        <span style="font-size: 11px; color: var(--text-muted);">${debtorsCount} Customers (${debtorsPercent.toFixed(1)}%)</span>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="width: 14px; height: 14px; background: #10b981; border-radius: 4px; display: inline-block;"></span>
+                    <div>
+                        <span style="font-size: 13px; font-weight: 600; display: block; color: var(--text-primary);">Debt-Free</span>
+                        <span style="font-size: 11px; color: var(--text-muted);">${debtFree} Customers (${debtFreePercent.toFixed(1)}%)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function drawCustomerDebtChart(debtors) {
+    const limitItems = debtors.slice(0, 5);
+    const svgWidth = 650;
+    const svgHeight = 220;
+    
+    const chartLeft = 180;
+    const chartWidth = 430;
+    const barHeight = 18;
+    const rowHeight = 32;
+    const startY = 25;
+
+    const maxVal = Math.max(...limitItems.map(d => d.overdue_amount), 1);
+
+    let rowsHTML = '';
+    limitItems.forEach((item, index) => {
+        const y = startY + index * rowHeight;
+        const barWidthVal = (item.overdue_amount / maxVal) * chartWidth;
+        const nameLabel = item.name.length > 22 ? item.name.substring(0, 20) + '..' : item.name;
+
+        rowsHTML += `
+            <text x="${chartLeft - 10}" y="${y + 13}" text-anchor="end" font-size="11" font-weight="600" fill="var(--text-primary)">${escapeHtml(nameLabel)}</text>
+            
+            <!-- Background track -->
+            <rect x="${chartLeft}" y="${y}" width="${chartWidth}" height="${barHeight}" fill="var(--border-color)" rx="3" opacity="0.2"/>
+            
+            <!-- Red Overdue Bar -->
+            <rect x="${chartLeft}" y="${y}" width="0" height="${barHeight}" fill="#ef4444" rx="3">
+                <animate attributeName="width" from="0" to="${barWidthVal}" dur="0.6s" fill="freeze" />
+            </rect>
+            
+            <text x="${chartLeft + Math.max(barWidthVal, 15) + 8}" y="${y + 13}" font-size="11" font-weight="bold" fill="#ef4444">
+                ₹${item.overdue_amount.toFixed(2)}
+            </text>
+        `;
+    });
+
+    return `
+        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" width="100%" height="220" style="font-family: var(--font-body);">
+            ${rowsHTML}
+            <line x1="${chartLeft}" y1="10" x2="${chartLeft}" y2="${startY + limitItems.length * rowHeight}" stroke="var(--border-color)" stroke-width="1.5" />
+        </svg>
+    `;
+}
+
+function drawCustomerCreditChart(customers) {
+    const limitItems = [...customers].sort((a, b) => b.credit_limit - a.credit_limit).slice(0, 5);
+    const svgWidth = 650;
+    const svgHeight = 220;
+    
+    const chartLeft = 180;
+    const chartWidth = 430;
+    const barHeight = 18;
+    const rowHeight = 32;
+    const startY = 25;
+
+    const maxVal = Math.max(...limitItems.map(c => c.credit_limit), 1);
+
+    let rowsHTML = '';
+    limitItems.forEach((item, index) => {
+        const y = startY + index * rowHeight;
+        const barWidthVal = (item.credit_limit / maxVal) * chartWidth;
+        const nameLabel = item.name.length > 22 ? item.name.substring(0, 20) + '..' : item.name;
+
+        rowsHTML += `
+            <text x="${chartLeft - 10}" y="${y + 13}" text-anchor="end" font-size="11" font-weight="600" fill="var(--text-primary)">${escapeHtml(nameLabel)}</text>
+            
+            <!-- Background track -->
+            <rect x="${chartLeft}" y="${y}" width="${chartWidth}" height="${barHeight}" fill="var(--border-color)" rx="3" opacity="0.2"/>
+            
+            <!-- Green Credit Bar -->
+            <rect x="${chartLeft}" y="${y}" width="0" height="${barHeight}" fill="#10b981" rx="3">
+                <animate attributeName="width" from="0" to="${barWidthVal}" dur="0.6s" fill="freeze" />
+            </rect>
+            
+            <text x="${chartLeft + Math.max(barWidthVal, 15) + 8}" y="${y + 13}" font-size="11" font-weight="bold" fill="#10b981">
+                ₹${item.credit_limit.toFixed(2)}
+            </text>
+        `;
+    });
+
+    return `
+        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" width="100%" height="220" style="font-family: var(--font-body);">
+            ${rowsHTML}
+            <line x1="${chartLeft}" y1="10" x2="${chartLeft}" y2="${startY + limitItems.length * rowHeight}" stroke="var(--border-color)" stroke-width="1.5" />
+        </svg>
+    `;
+}
+
+// ── PROFILE AND COMPANIES MANAGEMENT ──
+state.companies = [];
+state.activeCompany = null;
+
+async function loadUserProfileAndBranding() {
+    try {
+        const profile = await fetchWithAuth(`${API_URL}/api/v1/profile`);
+        if (profile) {
+            document.getElementById('profile-name').value = profile.full_name || '';
+            document.getElementById('profile-address').value = profile.address || '';
+            
+            if (profile.full_name) {
+                document.getElementById('user-display-name').textContent = profile.full_name;
+                document.getElementById('user-avatar-initials').textContent = profile.full_name.substring(0, 2).toUpperCase();
+            }
+            
+            if (profile.active_company_id) {
+                const companies = await fetchWithAuth(`${API_URL}/api/v1/companies`);
+                state.companies = companies || [];
+                const activeCo = companies.find(c => c.id === profile.active_company_id);
+                if (activeCo) {
+                    state.activeCompany = activeCo;
+                    document.getElementById('sidebar-brand-name').textContent = activeCo.name;
+                    if (activeCo.logo_base64) {
+                        document.getElementById('sidebar-brand-logo').src = activeCo.logo_base64;
+                        document.getElementById('header-company-logo').src = activeCo.logo_base64;
+                        document.getElementById('header-company-logo').style.display = 'block';
+                    } else {
+                        document.getElementById('sidebar-brand-logo').src = 'logo.png';
+                        document.getElementById('header-company-logo').src = 'logo.png';
+                    }
+                }
+            } else {
+                document.getElementById('sidebar-brand-name').textContent = 'Master of Security System';
+                document.getElementById('sidebar-brand-logo').src = 'logo.png';
+                document.getElementById('header-company-logo').src = 'logo.png';
+                state.activeCompany = null;
+            }
+        }
+    } catch (err) {
+        console.error('Error loading user profile & branding:', err);
+    }
+}
+
+async function loadProfileTab() {
+    await loadUserProfileAndBranding();
+    await renderCompaniesList();
+}
+
+async function renderCompaniesList() {
+    try {
+        const listEl = document.getElementById('companies-list');
+        if (!listEl) return;
+        
+        const companies = await fetchWithAuth(`${API_URL}/api/v1/companies`);
+        state.companies = companies || [];
+        
+        if (state.companies.length === 0) {
+            listEl.innerHTML = `
+                <div style="grid-column: 1/-1; padding: 20px; text-align: center; color: var(--text-muted);">
+                    No company profiles created yet. Click "Add Company" to get started.
+                </div>
+            `;
+            return;
+        }
+        
+        listEl.innerHTML = state.companies.map(c => {
+            const isActive = state.activeCompany && state.activeCompany.id === c.id;
+            const logoSrc = c.logo_base64 || 'logo.png';
+            return `
+                <div class="card" style="padding: 15px; display: flex; flex-direction: column; gap: 10px; border: 1px solid ${isActive ? 'var(--color-primary)' : 'var(--border-color)'}; position: relative;">
+                    ${isActive ? `<span style="position: absolute; top: 10px; right: 10px; background-color: var(--color-success); color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold;">Active</span>` : ''}
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <img src="${logoSrc}" style="width: 50px; height: 50px; object-fit: contain; border: 1px solid var(--border-color); border-radius: 6px; padding: 2px; background: white;">
+                        <div>
+                            <h4 style="margin: 0; font-size: 15px;">${escapeHtml(c.name)}</h4>
+                            <p style="margin: 3px 0 0 0; font-size: 12px; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${escapeHtml(c.address || 'No address set')}</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border-color);">
+                        ${!isActive ? `<button class="btn btn-ghost btn-sm" onclick="window.setActiveCompany('${c.id}')" style="font-size: 12px; padding: 4px 8px; cursor: pointer;">Set Active</button>` : ''}
+                        <button class="btn btn-ghost btn-sm" onclick="window.editCompanyProfile('${c.id}')" style="font-size: 12px; padding: 4px 8px; cursor: pointer;">Edit</button>
+                        <button class="btn btn-ghost btn-sm text-danger" onclick="window.deleteCompanyProfile('${c.id}')" style="font-size: 12px; padding: 4px 8px; cursor: pointer;">Delete</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        lucide.createIcons();
+    } catch (err) {
+        console.error('Error rendering companies:', err);
+    }
+}
+
+window.setActiveCompany = async function(id) {
+    try {
+        await fetchWithAuth(`${API_URL}/api/v1/profile`, {
+            method: 'PUT',
+            body: JSON.stringify({ active_company_id: id })
+        });
+        await loadUserProfileAndBranding();
+        await renderCompaniesList();
+        await populatePOSCompanies();
+    } catch (err) {
+        alert(`Error setting active company: ${err.message}`);
+    }
+};
+
+window.editCompanyProfile = function(id) {
+    const c = state.companies.find(comp => comp.id === id);
+    if (!c) return;
+    document.getElementById('company-modal-title').textContent = 'Edit Company';
+    document.getElementById('company-id').value = c.id;
+    document.getElementById('company-name').value = c.name;
+    document.getElementById('company-address').value = c.address || '';
+    document.getElementById('company-logo-base64').value = c.logo_base64 || '';
+    document.getElementById('company-logo-preview').src = c.logo_base64 || 'logo.png';
+    document.getElementById('company-logo-file').value = '';
+    document.getElementById('company-error').classList.add('hidden');
+    openModal('company-modal');
+};
+
+window.deleteCompanyProfile = async function(id) {
+    if (!confirm("Are you sure you want to delete this company profile?")) {
+        return;
+    }
+    try {
+        await fetchWithAuth(`${API_URL}/api/v1/companies/${id}`, {
+            method: 'DELETE'
+        });
+        await loadUserProfileAndBranding();
+        await renderCompaniesList();
+        await populatePOSCompanies();
+    } catch (err) {
+        alert(`Error deleting company: ${err.message}`);
+    }
+};
+
+async function handleCompanySubmit(e) {
+    e.preventDefault();
+    const errorEl = document.getElementById('company-error');
+    const errorText = document.getElementById('company-error-text');
+    errorEl.classList.add('hidden');
+
+    const id = document.getElementById('company-id').value;
+    const payload = {
+        name: document.getElementById('company-name').value.trim(),
+        address: document.getElementById('company-address').value.trim() || null,
+        logo_base64: document.getElementById('company-logo-base64').value || null
+    };
+
+    try {
+        let url = `${API_URL}/api/v1/companies`;
+        let method = 'POST';
+        if (id) {
+            url += `/${id}`;
+            method = 'PUT';
+        }
+
+        await fetchWithAuth(url, {
+            method: method,
+            body: JSON.stringify(payload)
+        });
+
+        closeModal('company-modal');
+        await renderCompaniesList();
+        await populatePOSCompanies();
+    } catch (err) {
+        errorText.textContent = err.message;
+        errorEl.classList.remove('hidden');
+    }
+}
+
+async function handleProfileSubmit(e) {
+    e.preventDefault();
+    try {
+        const payload = {
+            full_name: document.getElementById('profile-name').value.trim(),
+            address: document.getElementById('profile-address').value.trim() || null
+        };
+        await fetchWithAuth(`${API_URL}/api/v1/profile`, {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+        });
+        alert('Profile details saved successfully!');
+        await loadUserProfileAndBranding();
+    } catch (err) {
+        alert(`Error saving profile: ${err.message}`);
+    }
+}
+
+async function populatePOSCompanies() {
+    const select = document.getElementById('pos-company-select');
+    if (!select) return;
+    try {
+        const companies = await fetchWithAuth(`${API_URL}/api/v1/companies`);
+        const profile = await fetchWithAuth(`${API_URL}/api/v1/profile`);
+        const activeId = profile ? profile.active_company_id : null;
+        
+        select.innerHTML = '<option value="">Default (Master of Security System)</option>' + 
+            companies.map(c => `<option value="${c.id}" ${c.id === activeId ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
+    } catch (err) {
+        console.error('Error populating POS companies:', err);
+    }
+}
+
+// ── PRODUCT CATEGORY MANAGER ──
+async function loadCategoryManagerList() {
+    try {
+        const tbody = document.querySelector('#category-manager-table tbody');
+        if (!tbody) return;
+        const categories = await fetchWithAuth(`${API_URL}/api/v1/inventory/meta/categories`);
+        if (categories.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted">No categories created yet.</td></tr>`;
+            return;
+        }
+        tbody.innerHTML = categories.map(cat => `
+            <tr>
+                <td><strong>${escapeHtml(cat.name)}</strong></td>
+                <td>${escapeHtml(cat.description || '—')}</td>
+                <td class="text-right">
+                    <button class="action-btn" style="color: var(--color-danger); cursor: pointer;" onclick="window.deleteCategory('${cat.name}')" title="Delete Category">
+                        <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+        lucide.createIcons();
+    } catch (err) {
+        console.error('Error loading category list:', err);
+    }
+}
+
+window.deleteCategory = async function(name) {
+    if (!confirm(`Are you sure you want to delete category "${name}"?`)) return;
+    try {
+        await fetchWithAuth(`${API_URL}/api/v1/inventory/categories/${encodeURIComponent(name)}`, {
+            method: 'DELETE'
+        });
+        await loadCategoryManagerList();
+        await loadMetadata();
+    } catch (err) {
+        alert(`Error deleting category: ${err.message}`);
+    }
+};
+
+async function handleCategoryManagerSubmit(e) {
+    e.preventDefault();
+    const nameEl = document.getElementById('new-category-name');
+    const descEl = document.getElementById('new-category-desc');
+    const name = nameEl.value.trim();
+    const desc = descEl.value.trim();
+    try {
+        await fetchWithAuth(`${API_URL}/api/v1/inventory/categories`, {
+            method: 'POST',
+            body: JSON.stringify({ name, description: desc })
+        });
+        nameEl.value = '';
+        descEl.value = '';
+        await loadCategoryManagerList();
+        await loadMetadata();
+    } catch (err) {
+        alert(`Error creating category: ${err.message}`);
+    }
+}
+
+// ── INVOICE EDITING ──
+async function openEditInvoiceModal() {
+    if (!activeInvoiceId) return;
+    try {
+        const invoice = await fetchWithAuth(`${API_URL}/api/v1/billing/invoices/${activeInvoiceId}`);
+        document.getElementById('edit-invoice-id').value = invoice.id;
+        document.getElementById('edit-invoice-cust-name').value = invoice.customer_name || '';
+        document.getElementById('edit-invoice-cust-phone').value = invoice.customer_phone || '';
+        document.getElementById('edit-invoice-paymode').value = invoice.payment_mode || 'cash';
+        document.getElementById('edit-invoice-discount').value = invoice.discount_amount || 0;
+        document.getElementById('edit-invoice-notes').value = invoice.notes || '';
+        document.getElementById('edit-invoice-error').classList.add('hidden');
+        openModal('edit-invoice-modal');
+    } catch (err) {
+        alert(`Error loading invoice details: ${err.message}`);
+    }
+}
+
+async function handleEditInvoiceSubmit(e) {
+    e.preventDefault();
+    const errorEl = document.getElementById('edit-invoice-error');
+    const errorText = document.getElementById('edit-invoice-error-text');
+    errorEl.classList.add('hidden');
+
+    const id = document.getElementById('edit-invoice-id').value;
+    const payload = {
+        customer_name: document.getElementById('edit-invoice-cust-name').value.trim() || null,
+        customer_phone: document.getElementById('edit-invoice-cust-phone').value.trim() || null,
+        payment_mode: document.getElementById('edit-invoice-paymode').value,
+        discount_amount: parseFloat(document.getElementById('edit-invoice-discount').value) || 0.0,
+        notes: document.getElementById('edit-invoice-notes').value.trim() || null
+    };
+
+    try {
+        await fetchWithAuth(`${API_URL}/api/v1/billing/invoices/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+        });
+        closeModal('edit-invoice-modal');
+        closeModal('invoice-modal');
+        loadSalesData();
+        loadCustomersData();
+        loadDashboardData();
+    } catch (err) {
+        errorText.textContent = err.message;
+        errorEl.classList.remove('hidden');
+    }
+}
+
+// ── WAREHOUSE / LOCATION MANAGEMENT ──
+async function loadManageLocationsList() {
+    const errorEl = document.getElementById('location-create-error');
+    if (errorEl) errorEl.classList.add('hidden');
+
+    try {
+        const locs = await fetchWithAuth(`${API_URL}/api/v1/inventory/meta/locations`);
+        const tbody = document.getElementById('locations-list-table-body');
+        if (!tbody) return;
+
+        if (locs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No locations found.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = locs.map(l => `
+            <tr>
+                <td><strong>${escapeHtml(l.name)}</strong></td>
+                <td><code>${escapeHtml(l.code)}</code></td>
+                <td><span class="badge ${l.type === 'warehouse' ? 'badge-paid' : 'badge-partial'}">${escapeHtml(l.type)}</span></td>
+                <td class="text-right">
+                    <button class="btn btn-sm btn-ghost text-danger" onclick="deleteWarehouseLocation('${l.id}')">
+                        <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i> Delete
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+        lucide.createIcons();
+    } catch (err) {
+        console.error("Failed to load locations list:", err);
+    }
+}
+
+async function handleLocationCreateSubmit(e) {
+    e.preventDefault();
+    const errorEl = document.getElementById('location-create-error');
+    const errorText = document.getElementById('location-create-error-text');
+    errorEl.classList.add('hidden');
+
+    const name = document.getElementById('loc-new-name').value.trim();
+    const code = document.getElementById('loc-new-code').value.trim();
+    const type = document.getElementById('loc-new-type').value;
+
+    try {
+        await fetchWithAuth(`${API_URL}/api/v1/inventory/meta/locations`, {
+            method: 'POST',
+            body: JSON.stringify({ name, code, type })
+        });
+
+        // Clear form fields
+        document.getElementById('loc-new-name').value = '';
+        document.getElementById('loc-new-code').value = '';
+
+        // Reload locations
+        await loadMetadata();
+        await loadManageLocationsList();
+    } catch (err) {
+        errorText.textContent = err.message;
+        errorEl.classList.remove('hidden');
+    }
+}
+
+window.deleteWarehouseLocation = async function(id) {
+    if (!confirm('Are you sure you want to delete this location? This action cannot be undone.')) {
+        return;
+    }
+
+    try {
+        await fetchWithAuth(`${API_URL}/api/v1/inventory/meta/locations/${id}`, {
+            method: 'DELETE'
+        });
+
+        // Reload locations
+        await loadMetadata();
+        await loadManageLocationsList();
+    } catch (err) {
+        alert(`Cannot delete location: ${err.message}`);
+    }
+};
+
+// ── WHATSAPP MESSAGE SYSTEM ──
+// ── WHATSAPP MESSAGE SYSTEM SIMULATION ──
+state.selectedWaCustomer = null;
+state.waMessages = {}; // customer_id -> Array of messages
+state.waCustomers = []; // Keep cache of fetched customers for filtering
+
+async function openWhatsAppModal() {
+    state.selectedWaCustomer = null;
+    const contactsListEl = document.getElementById('wa-contacts-list');
+    if (!contactsListEl) return;
+    
+    // Clear right chat pane UI initially
+    document.getElementById('wa-active-name').textContent = 'Select a customer';
+    document.getElementById('wa-active-status').textContent = 'Offline';
+    document.getElementById('wa-active-avatar').textContent = '?';
+    document.getElementById('wa-messages-container').innerHTML = `
+        <div style="align-self: center; background-color: rgba(225, 230, 235, 0.9); padding: 8px 16px; border-radius: 8px; font-size: 12px; color: #54656f; font-weight: 500; margin-top: 100px;">
+            Select a customer from the left to start simulated conversation
+        </div>`;
+    document.getElementById('wa-message-input').value = '';
+    document.getElementById('wa-message-input').disabled = true;
+    document.getElementById('wa-send-btn').disabled = true;
+    document.getElementById('wa-message-template').value = 'manual';
+
+    try {
+        const res = await fetchWithAuth(`${API_URL}/api/v1/customers?page=1&size=100`);
+        state.waCustomers = res.items || [];
+        state.waCustomers.sort((a, b) => a.name.localeCompare(b.name));
+        
+        renderWaContacts(state.waCustomers);
+        openModal('whatsapp-modal');
+    } catch (err) {
+        console.error("Failed to load customers for WhatsApp simulator:", err);
+        alert("Failed to load customers. Please check network connection.");
+    }
+}
+
+function renderWaContacts(customers) {
+    const listEl = document.getElementById('wa-contacts-list');
+    if (!listEl) return;
+    
+    if (customers.length === 0) {
+        listEl.innerHTML = '<div style="padding: 15px; text-align: center; color: var(--text-muted); font-size: 13px;">No contacts found</div>';
+        return;
+    }
+
+    listEl.innerHTML = customers.map(c => {
+        const initials = c.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        const lastMsgs = state.waMessages[c.id] || [];
+        const lastMsgText = lastMsgs.length > 0 ? lastMsgs[lastMsgs.length - 1].text : 'Tap to start chat...';
+        const isSelected = state.selectedWaCustomer && state.selectedWaCustomer.id === c.id;
+
+        return `
+            <div onclick="selectWaCustomer('${c.id}')" style="display: flex; align-items: center; gap: 12px; padding: 12px 15px; cursor: pointer; border-bottom: 1px solid var(--border-color); background-color: ${isSelected ? 'rgba(7, 94, 84, 0.08)' : 'transparent'}; transition: background-color 0.2s;" class="wa-contact-item">
+                <div style="width: 44px; height: 44px; border-radius: 50%; background-color: #075E54; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 15px; flex-shrink: 0;">${initials}</div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                        <h4 style="margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${escapeHtml(c.name)}</h4>
+                        <span style="font-size: 10px; color: var(--text-muted);">${c.phone ? escapeHtml(c.phone) : 'No Phone'}</span>
+                    </div>
+                    <p style="margin: 3px 0 0 0; font-size: 12px; color: var(--text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${escapeHtml(lastMsgText)}</p>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function filterWaContacts(term) {
+    const filtered = state.waCustomers.filter(c => 
+        c.name.toLowerCase().includes(term) || 
+        (c.phone && c.phone.includes(term))
+    );
+    renderWaContacts(filtered);
+}
+
+window.selectWaCustomer = function(customerId) {
+    const customer = state.waCustomers.find(c => c.id === customerId);
+    if (!customer) return;
+    
+    state.selectedWaCustomer = customer;
+    
+    // Update contact selection highlight
+    renderWaContacts(state.waCustomers);
+
+    // Update active chat header
+    const initials = customer.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+    document.getElementById('wa-active-avatar').textContent = initials;
+    document.getElementById('wa-active-name').textContent = customer.name;
+    document.getElementById('wa-active-status').textContent = 'Online';
+    
+    // Enable inputs
+    document.getElementById('wa-message-input').disabled = false;
+    document.getElementById('wa-send-btn').disabled = false;
+    document.getElementById('wa-message-input').focus();
+    
+    // Populate templates and input
+    document.getElementById('wa-message-template').value = 'manual';
+    document.getElementById('wa-message-input').value = '';
+
+    // Render active messages
+    renderWaMessages(customerId);
+};
+
+function renderWaMessages(customerId) {
+    const container = document.getElementById('wa-messages-container');
+    if (!container) return;
+
+    const messages = state.waMessages[customerId] || [];
+    if (messages.length === 0) {
+        container.innerHTML = `
+            <div style="align-self: center; background-color: rgba(225, 230, 235, 0.9); padding: 6px 14px; border-radius: 8px; font-size: 11px; color: #54656f; font-weight: 500; margin-top: 20px;">
+                Secured simulated end-to-end conversation
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = messages.map(m => {
+        const isMe = (m.sender === 'me');
+        return `
+            <div style="align-self: ${isMe ? 'flex-end' : 'flex-start'}; background-color: ${isMe ? '#d9fdd3' : '#ffffff'}; color: #111b21; padding: 8px 12px; border-radius: ${isMe ? '10px 0 10px 10px' : '0 10px 10px 10px'}; max-width: 75%; box-shadow: 0 1px 1px rgba(0,0,0,0.06); position: relative; word-wrap: break-word; font-size: 13.5px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="line-height: 1.4;">${escapeHtml(m.text)}</span>
+                <span style="font-size: 9.5px; color: #667781; align-self: flex-end; display: flex; align-items: center; gap: 3px;">
+                    ${escapeHtml(m.time)}
+                    ${isMe ? '<i data-lucide="check-check" style="width: 13px; height: 13px; color: #53bdeb;"></i>' : ''}
+                </span>
+            </div>
+        `;
+    }).join('');
+    
+    lucide.createIcons();
+    container.scrollTop = container.scrollHeight;
+}
+
+function handleWaTemplateChange() {
+    if (!state.selectedWaCustomer) return;
+    
+    const templateVal = document.getElementById('wa-message-template').value;
+    const customer = state.selectedWaCustomer;
+    
+    let text = '';
+    if (templateVal === 'greeting') {
+        text = `Hello ${customer.name}, thank you for choosing our business. Let us know if you have any questions or need further details!`;
+    } else if (templateVal === 'payment_reminder') {
+        text = `Hello ${customer.name}, this is a friendly reminder that a payment is due for your recent purchase. Thank you!`;
+    } else if (templateVal === 'outstanding_debt') {
+        text = `Hello ${customer.name}, this is a notice regarding your outstanding balance of ₹${(customer.overdue_amount || 0).toFixed(2)}. Please process the payment at your earliest convenience. Thank you!`;
+    }
+
+    document.getElementById('wa-message-input').value = text;
+}
+
+async function handleWaSend() {
+    // Left empty for backwards compatibility
+}
+
+async function handleWaSimulateSend(e) {
+    if (e) e.preventDefault();
+    if (!state.selectedWaCustomer) return;
+
+    const input = document.getElementById('wa-message-input');
+    const msgText = input.value.trim();
+    if (!msgText) return;
+
+    const customerId = state.selectedWaCustomer.id;
+    if (!state.waMessages[customerId]) {
+        state.waMessages[customerId] = [];
+    }
+
+    const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    // Add sent message
+    state.waMessages[customerId].push({
+        text: msgText,
+        sender: 'me',
+        time: timeString
+    });
+
+    renderWaMessages(customerId);
+    renderWaContacts(state.waCustomers);
+    input.value = '';
+    
+    // Reset template selector
+    document.getElementById('wa-message-template').value = 'manual';
+
+    // Simulate Reply
+    const typingIndicator = document.getElementById('wa-typing-indicator');
+    typingIndicator.classList.remove('hidden');
+    
+    // Wait for typing simulation
+    setTimeout(() => {
+        typingIndicator.classList.add('hidden');
+        
+        const replies = [
+            `Thanks for the message! I will review this invoice and process the payment soon.`,
+            `Received, thank you. Can you please send the detailed PDF copy of the quotation as well?`,
+            `Ok, got it. I will check with my accounts team and get back to you.`,
+            `Thank you for the update. I have processed the payment. Please verify if it is received.`,
+            `Hi! I am currently out of town. I will verify this once I am back on Monday.`,
+            `Received. Please update my GST number as well in your records. Thanks!`
+        ];
+        const randomReply = replies[Math.floor(Math.random() * replies.length)];
+        
+        if (!state.waMessages[customerId]) {
+            state.waMessages[customerId] = [];
+        }
+        
+        state.waMessages[customerId].push({
+            text: randomReply,
+            sender: 'them',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+        
+        renderWaMessages(customerId);
+        renderWaContacts(state.waCustomers);
+    }, 2000);
+}
+
+
 
 

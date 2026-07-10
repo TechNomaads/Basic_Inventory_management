@@ -10,4 +10,6 @@ from app.models.pending_adjustment import PendingAdjustmentModel
 from app.models.audit_log import AuditLogModel
 from app.models.customer import CustomerModel
 from app.models.invoice import InvoiceModel, InvoiceItemModel, PaymentMode
+from app.models.company import CompanyModel
+
 

@@ -17,7 +17,7 @@
     <script src="socket.io.min.js"></script>
     <!-- HTML5-QRCode Scanner Library (local) -->
     <script src="html5-qrcode.min.js"></script>
-    <link rel="stylesheet" href="styles.css?v=2">
+    <link rel="stylesheet" href="styles.css?v=3">
 </head>
 
 <body>
@@ -79,8 +79,8 @@
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
             <div class="sidebar-brand">
-                <img src="logo.png" alt="Logo" class="brand-logo" style="width: 32px; height: 32px; object-fit: contain; margin-right: 10px; border-radius: 6px;">
-                <span>Master of Security System</span>
+                <img id="sidebar-brand-logo" src="logo.png" alt="Logo" class="brand-logo" style="width: 32px; height: 32px; object-fit: contain; margin-right: 10px; border-radius: 6px;">
+                <span id="sidebar-brand-name">Master of Security System</span>
             </div>
 
             <nav class="sidebar-nav">
@@ -117,6 +117,10 @@
                     <i data-lucide="users"></i>
                     <span>Customers</span>
                 </button>
+                <button class="nav-item" data-tab="profile" id="nav-profile">
+                    <i data-lucide="user"></i>
+                    <span>Profile</span>
+                </button>
             </nav>
 
             <div class="sidebar-user">
@@ -138,7 +142,8 @@
                 <div class="header-left">
                     <h2 id="current-tab-title">Dashboard</h2>
                 </div>
-                <div class="header-right">
+                <div class="header-right" style="display: flex; align-items: center; gap: 15px;">
+                    <img id="header-company-logo" src="logo.png" alt="Company Logo" style="width: 36px; height: 36px; object-fit: contain; border-radius: 6px; border: 1px solid var(--border-color); background: white; padding: 2px;">
                     <!-- Real-Time Sync Status -->
                     <div id="sync-status" class="sync-status disconnected">
                         <span class="status-dot"></span>
@@ -240,7 +245,11 @@
                             <option value="">All Categories</option>
                         </select>
                     </div>
-                    <button class="btn btn-primary" id="btn-add-product" class="admin-manager-only">
+                    <button class="btn btn-secondary admin-manager-only" id="btn-manage-categories" style="margin-right: 8px;">
+                        <i data-lucide="tag"></i>
+                        <span>Manage Categories</span>
+                    </button>
+                    <button class="btn btn-primary admin-manager-only" id="btn-add-product">
                         <i data-lucide="plus"></i>
                         <span>Add Product</span>
                     </button>
@@ -283,15 +292,20 @@
             <section id="tab-inventory" class="tab-panel hidden">
                 <div class="table-actions">
                     <div class="search-filters">
-                        <div class="location-select-wrapper">
-                            <label for="inventory-location-select" class="field-label">Active Location:</label>
-                            <select id="inventory-location-select" class="select-large">
-                                <!-- Locations will load here -->
-                            </select>
+                        <div class="location-select-wrapper" style="display: flex; align-items: flex-end; gap: 8px;">
+                            <div style="display: flex; flex-direction: column; flex: 1;">
+                                <label for="inventory-location-select" class="field-label">Active Location:</label>
+                                <select id="inventory-location-select" class="select-large" style="width: 100%;">
+                                    <!-- Locations will load here -->
+                                </select>
+                            </div>
+                            <button class="btn btn-ghost admin-manager-only" id="btn-manage-locations" title="Manage Warehouses" style="height: 42px; width: 42px; min-width: 42px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); cursor: pointer; margin-bottom: 2px;">
+                                <i data-lucide="settings"></i>
+                            </button>
                         </div>
-                        <button class="btn btn-ghost btn-icon-only scan-trigger-btn" id="inventory-scan-btn"
+                        <button class="btn btn-ghost" id="inventory-scan-btn"
                             title="Scan Barcode via Camera"
-                            style="align-self: flex-end; margin-bottom: 2px; padding: 10px; height: 42px;">
+                            style="align-self: flex-end; margin-bottom: 2px; padding: 10px; height: 42px; display: flex; align-items: center; gap: 6px; border: 1px solid var(--border-color);">
                             <i data-lucide="scan-line"></i>
                             <span>Scan Barcode</span>
                         </button>
@@ -472,6 +486,14 @@
                                 </div>
                             </div>
 
+                            <div class="form-group">
+                                <label for="pos-customer-gst">Customer GST Number (Optional)</label>
+                                <div class="input-wrapper">
+                                    <i data-lucide="tag" class="input-icon"></i>
+                                    <input type="text" id="pos-customer-gst" maxlength="15" placeholder="e.g. 19KJEPS3322A1ZA">
+                                </div>
+                            </div>
+
                             <div class="form-group hidden" id="pos-customer-credit-info"
                                 style="padding: 12px; border-radius: 6px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); margin-top: -5px; margin-bottom: 12px;">
                                 <div
@@ -491,6 +513,21 @@
                                     <i data-lucide="alert-triangle" style="width: 14px; height: 14px;"></i>
                                     <span>Purchase exceeds credit limit!</span>
                                 </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="pos-invoice-type">Invoice Type</label>
+                                <select id="pos-invoice-type" style="width: 100%; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 12px; background-color: var(--bg-input); color: var(--text-primary); font-family: inherit;">
+                                    <option value="billing">Tax Invoice (Billing)</option>
+                                    <option value="quotation">Quotation (Estimate)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="pos-company-select">Billing Company</label>
+                                <select id="pos-company-select" style="width: 100%; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 12px; background-color: var(--bg-input); color: var(--text-primary); font-family: inherit;">
+                                    <option value="">Default (Master of Security System)</option>
+                                </select>
                             </div>
 
                             <div class="form-group">
@@ -693,7 +730,194 @@
                     </div>
                 </div>
             </section>
+
+            <!-- ── TAB CONTENT: PROFILE ── -->
+            <section id="tab-profile" class="tab-panel hidden">
+                <div class="profile-layout" style="display: flex; flex-direction: column; gap: 20px;">
+                    <!-- User Profile Card -->
+                    <div class="card" style="padding: 20px;">
+                        <div class="card-header" style="margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                            <h3 style="display: flex; align-items: center; gap: 8px;"><i data-lucide="user"></i> Personal Profile</h3>
+                        </div>
+                        <form id="profile-form" style="display: flex; flex-direction: column; gap: 15px; max-width: 480px;">
+                            <div class="form-group">
+                                <label for="profile-name">Admin Name</label>
+                                <div class="input-wrapper">
+                                    <i data-lucide="user" class="input-icon"></i>
+                                    <input type="text" id="profile-name" required placeholder="Your Name">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-address">Admin Address</label>
+                                <div class="input-wrapper">
+                                    <i data-lucide="map-pin" class="input-icon"></i>
+                                    <textarea id="profile-address" rows="2" placeholder="Your Address" style="width: 100%; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 8px 8px 36px; background-color: var(--bg-input); color: var(--text-primary); font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary" style="align-self: flex-start;">
+                                <i data-lucide="save"></i> Save Profile Details
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Companies Card -->
+                    <div class="card" style="padding: 20px;">
+                        <div class="card-header" style="margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="display: flex; align-items: center; gap: 8px;"><i data-lucide="building"></i> Company Profiles</h3>
+                            <button class="btn btn-primary btn-sm" id="btn-add-company">
+                                <i data-lucide="plus"></i> Add Company
+                            </button>
+                        </div>
+                        
+                        <div id="companies-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px;">
+                            <!-- Companies rendered dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
+    </div>
+
+    <!-- ── 🏢 MANAGE LOCATIONS MODAL ── -->
+    <div id="locations-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 550px;">
+            <div class="modal-header">
+                <h3>Manage Warehouses & Locations</h3>
+                <button class="modal-close" data-close-modal="locations-modal"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 20px; display: flex; flex-direction: column; gap: 20px;">
+                <!-- Add Location Form -->
+                <form id="location-create-form" style="display: flex; flex-direction: column; gap: 12px; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background-color: var(--bg-card);">
+                    <h4 style="margin: 0; font-size: 14px; font-weight: 600;">Add New Location</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="loc-new-name" style="font-size: 11px;">Name *</label>
+                            <input type="text" id="loc-new-name" required placeholder="e.g. Sub-Warehouse B" style="width: 100%; height: 34px; font-size: 13px; padding: 5px 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--radius-md); background-color: var(--bg-input); color: var(--text-primary);">
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="loc-new-code" style="font-size: 11px;">Code *</label>
+                            <input type="text" id="loc-new-code" required placeholder="e.g. WH-002" style="width: 100%; height: 34px; font-size: 13px; padding: 5px 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--radius-md); background-color: var(--bg-input); color: var(--text-primary);">
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px;">
+                        <div class="form-group" style="margin: 0; display: flex; align-items: center; gap: 6px;">
+                            <label for="loc-new-type" style="font-size: 11px; margin: 0;">Type:</label>
+                            <select id="loc-new-type" style="height: 28px; font-size: 12px; padding: 2px 5px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background-color: var(--bg-input); color: var(--text-primary);">
+                                <option value="warehouse">Warehouse</option>
+                                <option value="store">Store</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm" style="font-size: 12px; padding: 6px 12px; cursor: pointer;">Add Location</button>
+                    </div>
+                    <div id="location-create-error" class="error-msg hidden" style="margin-top: 5px; font-size: 12px; padding: 6px;">
+                        <span id="location-create-error-text"></span>
+                    </div>
+                </form>
+
+                <!-- Locations List Table -->
+                <div>
+                    <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600;">Existing Locations</h4>
+                    <div style="max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <table class="table" style="margin: 0; font-size: 13px;">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Code</th>
+                                    <th>Type</th>
+                                    <th class="text-right" style="width: 80px;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="locations-list-table-body">
+                                <!-- Locations dynamically rendered here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 15px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-ghost" data-close-modal="locations-modal">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 💬 FLOATING WHATSAPP BUTTON ── -->
+    <button id="floating-whatsapp-btn" class="btn" style="position: fixed; bottom: 20px; right: 20px; z-index: 999; border-radius: 50%; width: 56px; height: 56px; padding: 0; display: flex; align-items: center; justify-content: center; background-color: #25D366; border-color: #25D366; box-shadow: 0 4px 10px rgba(0,0,0,0.3); cursor: pointer; transition: transform 0.2s ease;">
+        <i data-lucide="message-circle" style="width: 24px; height: 24px; color: white;"></i>
+    </button>
+
+    <!-- ── 💬 SIMULATED WHATSAPP WEB MODAL ── -->
+    <div id="whatsapp-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 850px; width: 90%; height: 600px; padding: 0; display: flex; flex-direction: column; overflow: hidden;">
+            <!-- Header -->
+            <div class="modal-header" style="background-color: #075E54; color: white; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: none;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i data-lucide="message-square" style="width: 24px; height: 24px; color: white;"></i>
+                    <h3 style="margin: 0; color: white; font-size: 16px; font-weight: 600;">WhatsApp Business Simulator</h3>
+                </div>
+                <button class="modal-close" data-close-modal="whatsapp-modal" style="color: white; background: none; border: none; cursor: pointer; font-size: 20px; display: flex; align-items: center; padding: 0;"><i data-lucide="x"></i></button>
+            </div>
+            
+            <div style="display: flex; flex: 1; min-height: 0;">
+                <!-- Left Sidebar: Chat List -->
+                <div style="width: 35%; border-right: 1px solid var(--border-color); background-color: var(--bg-card); display: flex; flex-direction: column; min-height: 0;">
+                    <!-- Search / Filter -->
+                    <div style="padding: 10px; border-bottom: 1px solid var(--border-color);">
+                        <div class="input-wrapper" style="margin: 0;">
+                            <i data-lucide="search" class="input-icon" style="width: 14px; height: 14px;"></i>
+                            <input type="text" id="wa-search-contacts" placeholder="Search chats..." style="width: 100%; height: 32px; font-size: 13px; padding-left: 30px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: 16px; background-color: var(--bg-input); color: var(--text-primary);">
+                        </div>
+                    </div>
+                    <!-- Contact list -->
+                    <div id="wa-contacts-list" style="flex: 1; overflow-y: auto;">
+                        <!-- Contacts rendered dynamically -->
+                    </div>
+                </div>
+
+                <!-- Right Pane: Active Chat -->
+                <div style="width: 65%; display: flex; flex-direction: column; background-color: #efeae2; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-repeat: repeat; min-height: 0; position: relative;">
+                    <!-- Chat Header -->
+                    <div style="background-color: var(--bg-card); padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color);">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 40px; height: 40px; border-radius: 50%; background-color: #075E54; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px;" id="wa-active-avatar">?</div>
+                            <div>
+                                <h4 style="margin: 0; font-size: 14px; font-weight: 600;" id="wa-active-name">Select a customer</h4>
+                                <span style="font-size: 11px; color: var(--text-muted);" id="wa-active-status">Offline</span>
+                            </div>
+                        </div>
+                        <!-- Template Select -->
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label for="wa-message-template" style="font-size: 11px; color: var(--text-muted); white-space: nowrap;">Template:</label>
+                            <select id="wa-message-template" style="height: 30px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--bg-input); color: var(--text-primary); padding: 0 5px;">
+                                <option value="manual">Custom Message</option>
+                                <option value="greeting">Friendly Greeting</option>
+                                <option value="payment_reminder">Payment Reminder</option>
+                                <option value="outstanding_debt">Outstanding Debt</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Messages List -->
+                    <div id="wa-messages-container" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px;">
+                        <div style="align-self: center; background-color: rgba(225, 230, 235, 0.9); padding: 5px 12px; border-radius: 8px; font-size: 11px; color: #54656f; font-weight: 500; margin-top: 100px;">
+                            Select a customer from the left to start simulated conversation
+                        </div>
+                    </div>
+
+                    <!-- Typing Indicator -->
+                    <div id="wa-typing-indicator" class="hidden" style="position: absolute; bottom: 65px; left: 20px; background-color: white; padding: 6px 12px; border-radius: 12px; font-size: 12px; color: #54656f; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                        typing...
+                    </div>
+
+                    <!-- Bottom Bar: Input -->
+                    <form id="wa-send-form" style="background-color: var(--bg-card); padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border-color); margin: 0;">
+                        <input type="text" id="wa-message-input" placeholder="Type a simulated message..." style="flex: 1; height: 38px; border: 1px solid var(--border-color); border-radius: 20px; padding: 0 15px; font-size: 14px; background-color: var(--bg-input); color: var(--text-primary); box-sizing: border-box;" disabled>
+                        <button type="submit" id="wa-send-btn" class="btn" style="background-color: #00a884; color: white; border-radius: 50%; width: 40px; height: 40px; padding: 0; min-width: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; border: none;" disabled>
+                            <i data-lucide="send" style="width: 18px; height: 18px; color: white;"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- ── 🛠️ PRODUCT MODAL (ADD / EDIT) ── -->
@@ -980,8 +1204,11 @@
                 </div>
             </div>
 
-            <div class="modal-footer">
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px;">
                 <button type="button" class="btn btn-ghost" data-close-modal="invoice-modal">Close</button>
+                <button type="button" class="btn btn-secondary" id="btn-edit-invoice">
+                    <i data-lucide="edit"></i> Edit Invoice
+                </button>
                 <button type="button" class="btn btn-primary" id="btn-print-receipt">
                     <i data-lucide="printer"></i> Print Receipt
                 </button>
@@ -1119,6 +1346,29 @@
                         </div>
                     </div>
 
+                    <div class="form-group">
+                        <label for="customer-gst">GST Number (Optional)</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="tag" class="input-icon"></i>
+                            <input type="text" id="customer-gst" maxlength="15" placeholder="e.g. 19KJEPS3322A1ZA">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customer-address">Customer Address</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="map-pin" class="input-icon"></i>
+                            <textarea id="customer-address" rows="3" placeholder="Enter customer address..." style="width: 100%; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 8px 8px 36px; background-color: var(--bg-input); color: var(--text-primary); font-family: inherit; font-size: 14px; box-sizing: border-box; resize: vertical;"></textarea>
+                        </div>
+                        <div id="gst-address-card" class="address-autofill-card hidden" style="margin-top: 10px; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background-color: var(--bg-card); display: flex; align-items: flex-start; gap: 8px;">
+                            <i data-lucide="info" class="text-primary" style="width: 16px; height: 16px; margin-top: 2px;"></i>
+                            <div style="font-size: 12px; color: var(--text-muted);">
+                                <strong>GST Registered Address:</strong>
+                                <span id="gst-address-text">Berhampore, West Bengal</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <div id="customer-error" class="error-msg hidden">
                         <i data-lucide="alert-circle"></i>
                         <span id="customer-error-text">An error occurred</span>
@@ -1200,6 +1450,165 @@
                 style="padding: 15px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
                 <button type="button" class="btn btn-ghost" data-close-modal="customer-history-modal">Close</button>
             </div>
+        </div>
+    </div>
+
+    <!-- ── 🛠️ COMPANY MODAL (ADD / EDIT) ── -->
+    <div id="company-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3 id="company-modal-title">Add Company</h3>
+                <button class="modal-close" data-close-modal="company-modal"><i data-lucide="x"></i></button>
+            </div>
+            <form id="company-form">
+                <input type="hidden" id="company-id">
+                <div class="modal-body" style="display: flex; flex-direction: column; gap: 15px; padding: 20px;">
+                    <div class="form-group">
+                        <label for="company-name">Company Name *</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="building" class="input-icon"></i>
+                            <input type="text" id="company-name" required placeholder="e.g. Master of Security System">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="company-address">Company Address</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="map-pin" class="input-icon"></i>
+                            <textarea id="company-address" rows="3" placeholder="Berhampore, West Bengal" style="width: 100%; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 8px 8px 36px; background-color: var(--bg-input); color: var(--text-primary); font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Company Logo</label>
+                        <div style="display: flex; align-items: center; gap: 15px; margin-top: 5px;">
+                            <img id="company-logo-preview" src="logo.png" style="width: 60px; height: 60px; object-fit: contain; border: 1px solid var(--border-color); border-radius: 6px; padding: 4px; background: white;">
+                            <div style="display: flex; flex-direction: column; gap: 5px;">
+                                <input type="file" id="company-logo-file" accept="image/*" style="font-size: 12px; color: var(--text-muted);">
+                                <input type="hidden" id="company-logo-base64">
+                                <span style="font-size: 10px; color: var(--text-muted);">Select PNG/JPG image</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="company-error" class="error-msg hidden">
+                        <i data-lucide="alert-circle"></i>
+                        <span id="company-error-text">An error occurred</span>
+                    </div>
+                </div>
+                <div class="modal-footer" style="padding: 15px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" class="btn btn-ghost" data-close-modal="company-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Company</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── 🛠️ CATEGORY MANAGER MODAL ── -->
+    <div id="category-manager-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 500px; max-height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h3>Category Manager</h3>
+                <button class="modal-close" data-close-modal="category-manager-modal"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 20px;">
+                <!-- Create Category Form -->
+                <div class="card" style="padding: 15px; border: 1px solid var(--border-color);">
+                    <h4 style="margin-bottom: 10px; display: flex; align-items: center; gap: 6px;"><i data-lucide="tag"></i> Create New Category</h4>
+                    <form id="category-manager-form" style="display: flex; flex-direction: column; gap: 10px;">
+                        <div class="form-group">
+                            <label for="new-category-name">Category Name *</label>
+                            <input type="text" id="new-category-name" required placeholder="e.g. Surveillance" style="width: 100%; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 12px; background-color: var(--bg-input); color: var(--text-primary); box-sizing: border-box;">
+                        </div>
+                        <div class="form-group">
+                            <label for="new-category-desc">Description</label>
+                            <input type="text" id="new-category-desc" placeholder="Category description..." style="width: 100%; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 12px; background-color: var(--bg-input); color: var(--text-primary); box-sizing: border-box;">
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm" style="align-self: flex-start;">Create Category</button>
+                    </form>
+                </div>
+                
+                <!-- Category List -->
+                <div>
+                    <h4 style="margin-bottom: 10px;">Existing Categories</h4>
+                    <div class="table-wrapper" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <table class="table" id="category-manager-table" style="font-size: 13px;">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Description</th>
+                                    <th class="text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Categories loaded dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 15px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-ghost" data-close-modal="category-manager-modal">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 🛠️ EDIT INVOICE MODAL ── -->
+    <div id="edit-invoice-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3>Edit Invoice Details</h3>
+                <button class="modal-close" data-close-modal="edit-invoice-modal"><i data-lucide="x"></i></button>
+            </div>
+            <form id="edit-invoice-form">
+                <input type="hidden" id="edit-invoice-id">
+                <div class="modal-body" style="display: flex; flex-direction: column; gap: 15px; padding: 20px;">
+                    <div class="form-group">
+                        <label for="edit-invoice-cust-name">Customer Name</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="user" class="input-icon"></i>
+                            <input type="text" id="edit-invoice-cust-name" placeholder="e.g. Walk-in">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-invoice-cust-phone">Customer Phone</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="phone" class="input-icon"></i>
+                            <input type="tel" id="edit-invoice-cust-phone" placeholder="e.g. 9876543210">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-invoice-paymode">Payment Mode</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="credit-card" class="input-icon"></i>
+                            <select id="edit-invoice-paymode" style="width: 100%; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 8px 8px 36px; background-color: var(--bg-input); color: var(--text-primary); font-family: inherit;">
+                                <option value="cash">Cash</option>
+                                <option value="card">Card</option>
+                                <option value="upi">UPI</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-invoice-discount">Discount Amount (₹)</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="tag" class="input-icon"></i>
+                            <input type="number" id="edit-invoice-discount" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-invoice-notes">Notes</label>
+                        <div class="input-wrapper">
+                            <i data-lucide="sticky-note" class="input-icon"></i>
+                            <textarea id="edit-invoice-notes" rows="2" placeholder="Invoice notes..." style="width: 100%; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 8px 8px 36px; background-color: var(--bg-input); color: var(--text-primary); font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+                        </div>
+                    </div>
+                    <div id="edit-invoice-error" class="error-msg hidden">
+                        <i data-lucide="alert-circle"></i>
+                        <span id="edit-invoice-error-text">An error occurred</span>
+                    </div>
+                </div>
+                <div class="modal-footer" style="padding: 15px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" class="btn btn-ghost" data-close-modal="edit-invoice-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
         </div>
     </div>
 

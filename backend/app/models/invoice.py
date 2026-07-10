@@ -67,6 +67,13 @@ class InvoiceModel(Base):
     customer_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True
     )
+    invoice_type: Mapped[str] = mapped_column(String(50), nullable=False, default="billing", server_default="billing")
+    company_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("companies.id", ondelete="SET NULL"), nullable=True
+    )
+    company_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    company_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    company_logo: Mapped[str | None] = mapped_column(Text, nullable=True)
     subtotal: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0.0)
     tax_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0.0)
     discount_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0.0)

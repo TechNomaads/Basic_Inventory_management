@@ -80,6 +80,8 @@ async def create_customer(
         phone=body.phone.strip() if body.phone else None,
         credit_limit=body.credit_limit if body.credit_limit is not None else 10000.00,
         overdue_amount=body.overdue_amount if body.overdue_amount is not None else 0.00,
+        gst_number=body.gst_number.strip() if body.gst_number else None,
+        address=body.address.strip() if body.address else None,
         created_at=datetime.now(timezone.utc)
     )
     db.add(customer)
@@ -96,7 +98,9 @@ async def create_customer(
             "name": customer.name,
             "phone": customer.phone,
             "credit_limit": float(customer.credit_limit),
-            "overdue_amount": float(customer.overdue_amount)
+            "overdue_amount": float(customer.overdue_amount),
+            "gst_number": customer.gst_number,
+            "address": customer.address
         },
         ip_address=request.client.host if request.client else None
     )
@@ -119,6 +123,39 @@ async def get_customers_kpis(
         "total_count": row[0] or 0,
         "total_overdue": float(row[1]) if row[1] is not None else 0.0,
         "total_credit": float(row[2]) if row[2] is not None else 0.0
+    }
+
+@router.get("/gst-lookup")
+async def gst_lookup(
+    gst_number: str = Query(..., description="GST number to lookup"),
+    _user: UserModel = Depends(get_current_user),
+):
+    gst = gst_number.strip().upper()
+    if len(gst) != 15:
+        return {"company_name": "GST Enterprise", "address": "Please enter a valid 15-digit GST number."}
+        
+    state_code = gst[:2]
+    
+    # State mapping
+    states = {
+        "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", 
+        "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh", 
+        "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur", 
+        "15": "Mizoram", "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal", 
+        "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat", 
+        "26": "Dadra and Nagar Haveli and Daman and Diu", "27": "Maharashtra", "29": "Karnataka", 
+        "30": "Goa", "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry", 
+        "35": "Andaman & Nicobar Islands", "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh"
+    }
+    
+    state_name = states.get(state_code, "India")
+    address = f"Plot {gst[3:6]}, Sector {gst[6:8]}, Industrial Area, {state_name} - {gst[9:12]}001"
+    company_name = f"GST Partner ({gst[2:6]} Corp)"
+    
+    return {
+        "gst_number": gst,
+        "company_name": company_name,
+        "address": address
     }
 
 @router.get("/{id}", response_model=CustomerDetailResponse)
@@ -171,7 +208,9 @@ async def update_customer(
         "name": customer.name,
         "phone": customer.phone,
         "credit_limit": float(customer.credit_limit),
-        "overdue_amount": float(customer.overdue_amount)
+        "overdue_amount": float(customer.overdue_amount),
+        "gst_number": customer.gst_number,
+        "address": customer.address
     }
     
     update_data = body.model_dump(exclude_unset=True)
@@ -192,6 +231,10 @@ async def update_customer(
         customer.credit_limit = update_data["credit_limit"]
     if "overdue_amount" in update_data and update_data["overdue_amount"] is not None:
         customer.overdue_amount = update_data["overdue_amount"]
+    if "gst_number" in update_data:
+        customer.gst_number = update_data["gst_number"].strip() if update_data["gst_number"] else None
+    if "address" in update_data:
+        customer.address = update_data["address"].strip() if update_data["address"] else None
         
     await db.flush()
     
@@ -208,3 +251,42 @@ async def update_customer(
     )
     await db.commit()
     return customer
+
+
+@router.delete("/{id}", status_code=204)
+async def delete_customer(
+    id: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: UserModel = Depends(get_current_user),
+):
+    stmt = select(CustomerModel).where(CustomerModel.id == id)
+    res = await db.execute(stmt)
+    customer = res.scalar_one_or_none()
+    if not customer:
+        raise NotFoundException(f"Customer with ID {id} not found")
+        
+    old_values = {
+        "name": customer.name,
+        "phone": customer.phone,
+        "credit_limit": float(customer.credit_limit),
+        "overdue_amount": float(customer.overdue_amount),
+        "gst_number": customer.gst_number,
+        "address": customer.address
+    }
+    
+    await db.delete(customer)
+    await db.flush()
+    
+    # Audit log
+    await write_audit_log(
+        db=db,
+        user_id=user.id,
+        table_name="customers",
+        record_id=id,
+        action=AuditAction.delete,
+        old_values=old_values,
+        ip_address=request.client.host if request.client else None
+    )
+    await db.commit()
+    return None

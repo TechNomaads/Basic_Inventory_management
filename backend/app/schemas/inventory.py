@@ -93,3 +93,17 @@ class PendingAdjustmentResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class CategoryCreateRequest(BaseModel):
+    name: str = Field(..., max_length=100)
+    description: str | None = Field(default=None)
+    parent_id: UUID | None = Field(default=None)
+
+
+class LocationCreateRequest(BaseModel):
+    name: str = Field(..., max_length=150)
+    code: str = Field(..., max_length=50)
+    type: str | None = Field(default="warehouse", max_length=50)
+
+

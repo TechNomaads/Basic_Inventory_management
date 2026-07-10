@@ -66,6 +66,26 @@ body {
     overflow: hidden;
     background: var(--bg-base);
 }
+.ambient-glow::before {
+    content: '';
+    position: absolute;
+    top: -10%;
+    left: -10%;
+    width: 50%;
+    height: 50%;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+    filter: blur(80px);
+}
+.ambient-glow::after {
+    content: '';
+    position: absolute;
+    bottom: -10%;
+    right: -10%;
+    width: 60%;
+    height: 60%;
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.06) 0%, transparent 70%);
+    filter: blur(100px);
+}
 
 /* ── SCROLLBARS ── */
 ::-webkit-scrollbar {
@@ -352,8 +372,8 @@ input:focus, select:focus, textarea:focus {
 
 /* ── SIDEBAR ── */
 .sidebar {
-    background-color: var(--bg-sidebar);
-    border-right: 1px solid var(--border-color);
+    background: linear-gradient(180deg, #0f172a 0%, #1e1b4b 100%) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -365,18 +385,19 @@ input:focus, select:focus, textarea:focus {
     display: flex;
     align-items: center;
     gap: 12px;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 .brand-icon {
     width: 24px;
     height: 24px;
-    color: var(--color-primary);
+    color: #818cf8 !important;
 }
 .sidebar-brand span {
     font-family: var(--font-display);
     font-weight: 700;
     font-size: 18px;
     letter-spacing: -0.01em;
+    color: #ffffff !important;
 }
 
 .sidebar-nav {
@@ -394,7 +415,7 @@ input:focus, select:focus, textarea:focus {
     gap: 12px;
     padding: 12px 16px;
     border-radius: var(--radius-sm);
-    color: var(--text-muted);
+    color: #94a3b8 !important;
     font-family: var(--font-display);
     font-size: 14px;
     font-weight: 500;
@@ -408,13 +429,13 @@ input:focus, select:focus, textarea:focus {
     height: 18px;
 }
 .nav-item:hover {
-    color: var(--text-primary);
-    background: #f1f5f9;
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.08) !important;
 }
 .nav-item.active {
-    color: var(--color-primary);
-    background: var(--color-primary-glow);
-    border: 1px solid rgba(37, 99, 235, 0.2);
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.14) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
 }
 .nav-item.active::before {
     content: '';
@@ -423,7 +444,7 @@ input:focus, select:focus, textarea:focus {
     top: 25%;
     height: 50%;
     width: 4px;
-    background: var(--color-primary);
+    background: #6366f1 !important;
     border-radius: 0 4px 4px 0;
 }
 .nav-item .badge {
@@ -434,16 +455,16 @@ input:focus, select:focus, textarea:focus {
 /* User widget bottom of sidebar */
 .sidebar-user {
     padding: 16px 20px;
-    border-top: 1px solid var(--border-color);
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
     display: flex;
     align-items: center;
     gap: 12px;
-    background: #f8fafc;
+    background: rgba(0, 0, 0, 0.2) !important;
 }
 .user-avatar {
     width: 36px;
     height: 36px;
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+    background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%) !important;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -464,11 +485,12 @@ input:focus, select:focus, textarea:focus {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    color: #ffffff !important;
 }
 .user-role {
     display: block;
     font-size: 11px;
-    color: var(--text-muted);
+    color: #94a3b8 !important;
     text-transform: capitalize;
 }
 .logout-btn {
@@ -1361,6 +1383,111 @@ input:focus, select:focus, textarea:focus {
     font-size: 11px;
     font-weight: 600;
 }
+
+/* ── SIDEBAR ICON AND STATS CARD COLOR ENHANCEMENTS ── */
+
+/* Enlarge sidebar navigation icons by 40% */
+.nav-item svg {
+    width: 25px !important;
+    height: 25px !important;
+    stroke-width: 2.2;
+}
+
+/* Distinct color accents for sidebar menu item icons based on feature themes */
+.nav-item[data-tab="dashboard"] svg {
+    color: #3b82f6 !important; /* Indigo Blue */
+}
+.nav-item[data-tab="products"] svg {
+    color: #10b981 !important; /* Emerald Green */
+}
+.nav-item[data-tab="inventory"] svg {
+    color: #f59e0b !important; /* Amber Yellow */
+}
+.nav-item[data-tab="billing"] svg {
+    color: #ef4444 !important; /* POS Crimson Red */
+}
+.nav-item[data-tab="pending"] svg {
+    color: #8b5cf6 !important; /* Royal Purple */
+}
+.nav-item[data-tab="audit"] svg {
+    color: #64748b !important; /* Slate Gray */
+}
+.nav-item[data-tab="sales"] svg {
+    color: #ec4899 !important; /* Sales History Pink */
+}
+.nav-item[data-tab="customers"] svg {
+    color: #06b6d4 !important; /* Teal */
+}
+.nav-item[data-tab="profile"] svg {
+    color: #6366f1 !important; /* User Profile Violet */
+}
+
+/* Enhancing dashboard and analytics cards with colorful indicators and gradient hover tints */
+#card-total-products {
+    border-left: 4px solid #3b82f6 !important;
+}
+#card-total-products:hover {
+    background: linear-gradient(145deg, var(--bg-card), rgba(59, 130, 246, 0.05)) !important;
+    border-color: #3b82f6 !important;
+}
+
+#card-low-stock {
+    border-left: 4px solid #f59e0b !important;
+}
+#card-low-stock:hover {
+    background: linear-gradient(145deg, var(--bg-card), rgba(245, 158, 11, 0.05)) !important;
+    border-color: #f59e0b !important;
+}
+
+#card-out-of-stock {
+    border-left: 4px solid #ef4444 !important;
+}
+#card-out-of-stock:hover {
+    background: linear-gradient(145deg, var(--bg-card), rgba(239, 68, 68, 0.05)) !important;
+    border-color: #ef4444 !important;
+}
+
+#card-todays-sales {
+    border-left: 4px solid #8b5cf6 !important;
+}
+#card-todays-sales:hover {
+    background: linear-gradient(145deg, var(--bg-card), rgba(139, 92, 246, 0.05)) !important;
+    border-color: #8b5cf6 !important;
+}
+
+#card-todays-revenue {
+    border-left: 4px solid #10b981 !important;
+}
+#card-todays-revenue:hover {
+    background: linear-gradient(145deg, var(--bg-card), rgba(16, 185, 129, 0.05)) !important;
+    border-color: #10b981 !important;
+}
+
+/* Customer Directory cards */
+#card-total-customers {
+    border-left: 4px solid #06b6d4 !important;
+}
+#card-total-customers:hover {
+    background: linear-gradient(145deg, var(--bg-card), rgba(6, 182, 212, 0.05)) !important;
+    border-color: #06b6d4 !important;
+}
+
+#card-outstanding-debt {
+    border-left: 4px solid #ec4899 !important;
+}
+#card-outstanding-debt:hover {
+    background: linear-gradient(145deg, var(--bg-card), rgba(236, 72, 153, 0.05)) !important;
+    border-color: #ec4899 !important;
+}
+
+#card-total-credit-limit {
+    border-left: 4px solid #10b981 !important;
+}
+#card-total-credit-limit:hover {
+    background: linear-gradient(145deg, var(--bg-card), rgba(16, 185, 129, 0.05)) !important;
+    border-color: #10b981 !important;
+}
+
 
 
 

@@ -27,6 +27,7 @@ from app.schemas.billing import (
     InvoiceSummaryItem,
     CustomerLookupResponse,
     SalesSummaryResponse,
+    InvoiceUpdateRequest,
 )
 from app.services import billing_service
 
@@ -143,3 +144,23 @@ async def get_daily_summary(
         revenue_today=summary["revenue_today"],
         profit_today=summary["profit_today"]
     )
+
+
+@router.put("/invoices/{id}", response_model=InvoiceResponse)
+async def update_invoice(
+    id: uuid.UUID,
+    request: Request,
+    data: InvoiceUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    user: UserModel = Depends(get_current_user),
+) -> InvoiceResponse:
+    """
+    Update details of an existing invoice (customer name/phone, payment mode, discount, notes).
+    Adjusts the customer's overdue balance if applicable.
+    """
+    ip_address = request.client.host if request.client else None
+    invoice = await billing_service.update_invoice(
+        db=db, invoice_id=id, data=data, user_id=user.id, ip_address=ip_address
+    )
+    return invoice
+
