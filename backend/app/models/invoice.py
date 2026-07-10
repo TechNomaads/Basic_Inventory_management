@@ -74,6 +74,7 @@ class InvoiceModel(Base):
     company_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
     company_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     company_logo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prepared_by_signature_b64: Mapped[str | None] = mapped_column(Text, nullable=True)
     subtotal: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0.0)
     tax_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0.0)
     discount_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0.0)

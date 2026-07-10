@@ -147,6 +147,62 @@ function bindEvents() {
         reader.readAsDataURL(file);
     });
 
+    // Profile Digital Signature File Uploader
+    document.getElementById('profile-signature-file').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const base64 = event.target.result;
+            state.profileSignatureBase64 = base64;
+            document.getElementById('profile-signature-preview').src = base64;
+            document.getElementById('profile-signature-preview').style.display = 'block';
+            document.getElementById('profile-signature-placeholder').style.display = 'none';
+            document.getElementById('btn-clear-profile-signature').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    });
+
+    document.getElementById('btn-clear-profile-signature').addEventListener('click', function() {
+        document.getElementById('profile-signature-file').value = '';
+        state.profileSignatureBase64 = null;
+        document.getElementById('profile-signature-preview').src = '';
+        document.getElementById('profile-signature-preview').style.display = 'none';
+        document.getElementById('profile-signature-placeholder').style.display = 'block';
+        document.getElementById('btn-clear-profile-signature').style.display = 'none';
+    });
+
+    // POS Checkout Digital Signature Override
+    document.getElementById('checkout-signature-file').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const base64 = event.target.result;
+            state.checkoutSignatureBase64 = base64;
+            document.getElementById('checkout-signature-preview').src = base64;
+            document.getElementById('checkout-signature-preview').style.display = 'block';
+            document.getElementById('checkout-signature-placeholder').style.display = 'none';
+            document.getElementById('btn-clear-checkout-signature').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    });
+
+    document.getElementById('btn-clear-checkout-signature').addEventListener('click', function() {
+        document.getElementById('checkout-signature-file').value = '';
+        state.checkoutSignatureBase64 = null;
+        if (state.profileSignatureBase64) {
+            document.getElementById('checkout-signature-preview').src = state.profileSignatureBase64;
+            document.getElementById('checkout-signature-preview').style.display = 'block';
+            document.getElementById('checkout-signature-placeholder').style.display = 'none';
+        } else {
+            document.getElementById('checkout-signature-preview').src = '';
+            document.getElementById('checkout-signature-preview').style.display = 'none';
+            document.getElementById('checkout-signature-placeholder').style.display = 'block';
+        }
+        document.getElementById('btn-clear-checkout-signature').style.display = 'none';
+    });
+
     // Category Manager modal trigger
     document.getElementById('btn-manage-categories').addEventListener('click', () => {
         loadCategoryManagerList();
@@ -1719,6 +1775,20 @@ async function initBillingTab() {
     
     // 5. Render cart (empty initially)
     renderCart();
+
+    // Reset checkout signature overrides to default profile signature
+    state.checkoutSignatureBase64 = null;
+    document.getElementById('checkout-signature-file').value = '';
+    if (state.profileSignatureBase64) {
+        document.getElementById('checkout-signature-preview').src = state.profileSignatureBase64;
+        document.getElementById('checkout-signature-preview').style.display = 'block';
+        document.getElementById('checkout-signature-placeholder').style.display = 'none';
+    } else {
+        document.getElementById('checkout-signature-preview').src = '';
+        document.getElementById('checkout-signature-preview').style.display = 'none';
+        document.getElementById('checkout-signature-placeholder').style.display = 'block';
+    }
+    document.getElementById('btn-clear-checkout-signature').style.display = 'none';
 }
 
 async function loadPosInventory() {
@@ -2126,6 +2196,7 @@ async function submitPosCheckout() {
         customer_gst: document.getElementById('pos-customer-gst').value.trim() || null,
         invoice_type: document.getElementById('pos-invoice-type').value,
         company_id: document.getElementById('pos-company-select').value || null,
+        prepared_by_signature_b64: state.checkoutSignatureBase64 || state.profileSignatureBase64 || null,
         items: state.cart.items.map(item => ({
             product_id: item.product_id,
             quantity: item.quantity,
@@ -2147,6 +2218,20 @@ async function submitPosCheckout() {
         });
 
         alert('Checkout completed successfully!');
+
+        // Reset checkout signature overrides
+        state.checkoutSignatureBase64 = null;
+        document.getElementById('checkout-signature-file').value = '';
+        if (state.profileSignatureBase64) {
+            document.getElementById('checkout-signature-preview').src = state.profileSignatureBase64;
+            document.getElementById('checkout-signature-preview').style.display = 'block';
+            document.getElementById('checkout-signature-placeholder').style.display = 'none';
+        } else {
+            document.getElementById('checkout-signature-preview').src = '';
+            document.getElementById('checkout-signature-preview').style.display = 'none';
+            document.getElementById('checkout-signature-placeholder').style.display = 'block';
+        }
+        document.getElementById('btn-clear-checkout-signature').style.display = 'none';
         
         viewInvoiceDetails(invoice.id);
 
@@ -3247,6 +3332,32 @@ async function loadUserProfileAndBranding() {
                 document.getElementById('user-display-name').textContent = profile.full_name;
                 document.getElementById('user-avatar-initials').textContent = profile.full_name.substring(0, 2).toUpperCase();
             }
+
+            if (profile.signature_stamp_b64) {
+                state.profileSignatureBase64 = profile.signature_stamp_b64;
+                document.getElementById('profile-signature-preview').src = profile.signature_stamp_b64;
+                document.getElementById('profile-signature-preview').style.display = 'block';
+                document.getElementById('profile-signature-placeholder').style.display = 'none';
+                document.getElementById('btn-clear-profile-signature').style.display = 'block';
+
+                if (!state.checkoutSignatureBase64) {
+                    document.getElementById('checkout-signature-preview').src = profile.signature_stamp_b64;
+                    document.getElementById('checkout-signature-preview').style.display = 'block';
+                    document.getElementById('checkout-signature-placeholder').style.display = 'none';
+                }
+            } else {
+                state.profileSignatureBase64 = null;
+                document.getElementById('profile-signature-preview').src = '';
+                document.getElementById('profile-signature-preview').style.display = 'none';
+                document.getElementById('profile-signature-placeholder').style.display = 'block';
+                document.getElementById('btn-clear-profile-signature').style.display = 'none';
+
+                if (!state.checkoutSignatureBase64) {
+                    document.getElementById('checkout-signature-preview').src = '';
+                    document.getElementById('checkout-signature-preview').style.display = 'none';
+                    document.getElementById('checkout-signature-placeholder').style.display = 'block';
+                }
+            }
             
             if (profile.active_company_id) {
                 const companies = await fetchWithAuth(`${API_URL}/api/v1/companies`);
@@ -3409,7 +3520,8 @@ async function handleProfileSubmit(e) {
     try {
         const payload = {
             full_name: document.getElementById('profile-name').value.trim(),
-            address: document.getElementById('profile-address').value.trim() || null
+            address: document.getElementById('profile-address').value.trim() || null,
+            signature_stamp_b64: state.profileSignatureBase64 || null
         };
         await fetchWithAuth(`${API_URL}/api/v1/profile`, {
             method: 'PUT',

@@ -19,6 +19,7 @@ from fastapi import HTTPException
 
 from app.core.exceptions import ConflictException, NotFoundException
 from app.models.customer import CustomerModel
+from app.models.user import UserModel
 from app.models.invoice import InvoiceModel, InvoiceItemModel, PaymentMode
 from app.models.company import CompanyModel
 from app.models.product import ProductModel
@@ -249,6 +250,17 @@ async def process_checkout(
     prefix = "QTN" if is_quote else "INV"
     invoice_number = await generate_invoice_number(db, prefix=prefix)
 
+    # Fetch user's signature stamp if not overridden in checkout data
+    prepared_by_sig = None
+    if hasattr(data, 'prepared_by_signature_b64') and data.prepared_by_signature_b64:
+        prepared_by_sig = data.prepared_by_signature_b64
+    else:
+        stmt_user = select(UserModel).where(UserModel.id == user_id)
+        user_res = await db.execute(stmt_user)
+        user_record = user_res.scalar_one_or_none()
+        if user_record:
+            prepared_by_sig = user_record.signature_stamp_b64
+
     # 4. Create Invoice Record
     invoice = InvoiceModel(
         id=uuid.uuid4(),
@@ -261,6 +273,7 @@ async def process_checkout(
         company_name=company_name,
         company_address=company_address,
         company_logo=company_logo,
+        prepared_by_signature_b64=prepared_by_sig,
         subtotal=subtotal,
         tax_amount=total_tax,
         discount_amount=discount_amount,
@@ -777,12 +790,11 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            border-top: 1px solid #cbd5e1;
-            border-bottom: 2px solid #cbd5e1;
+            border: 1px solid #cbd5e1;
             padding: 12px 8px;
         }}
         .items-table td {{
-            border-bottom: 1px solid #e2e8f0;
+            border: 1px solid #cbd5e1;
             padding: 12px 8px;
             color: #334155;
             vertical-align: middle;
@@ -807,30 +819,14 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
         .totals-table {{
             width: 100%;
             border-collapse: collapse;
-            font-size: 12px;
+            font-size: 11px;
             margin-bottom: 20px;
         }}
         .totals-table td {{
-            padding: 6px 0;
-        }}
-        .totals-table .label {{
-            color: #64748b;
-            font-weight: 600;
-            text-align: right;
-            padding-right: 20px;
-        }}
-        .totals-table .val {{
-            color: #0f172a;
-            font-weight: 700;
-            text-align: right;
-            width: 100px;
-        }}
-        .totals-table .grand-total td {{
-            border-top: 2px solid #0f172a;
-            border-bottom: 2px solid #0f172a;
-            padding: 10px 0;
-            font-size: 14px;
-            color: #0f172a;
+            padding: 8px 12px;
+            border: 1px solid #cbd5e1;
+            color: #334155;
+            vertical-align: middle;
         }}
         .bank-block {{
             background-color: #f8fafc;
@@ -990,25 +986,29 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
                 <div class="summary-right">
                     <table class="totals-table">
                         <tr>
-                            <td class="label">Subtotal:</td>
-                            <td class="val">₹{invoice.subtotal:.2f}</td>
+                            <td class="label" style="background-color: #f8fafc; font-weight: 600; text-align: left; width: 110px;">Subtotal:</td>
+                            <td class="val" style="font-weight: 700; text-align: right;">₹{invoice.subtotal:.2f}</td>
                         </tr>
                         <tr>
-                            <td class="label">Tax (GST):</td>
-                            <td class="val">₹{invoice.tax_amount:.2f}</td>
+                            <td class="label" style="background-color: #f8fafc; font-weight: 600; text-align: left;">Tax (GST):</td>
+                            <td class="val" style="font-weight: 700; text-align: right;">₹{invoice.tax_amount:.2f}</td>
                         </tr>
                         <tr>
-                            <td class="label">Discount:</td>
-                            <td class="val">-₹{invoice.discount_amount:.2f}</td>
+                            <td class="label" style="background-color: #f8fafc; font-weight: 600; text-align: left;">Discount:</td>
+                            <td class="val" style="font-weight: 700; text-align: right; color: #ef4444;">-₹{invoice.discount_amount:.2f}</td>
                         </tr>
-                        <tr class="grand-total">
-                            <td class="label" style="font-weight: 800;">NET TOTAL:</td>
-                            <td class="val">₹{invoice.total_amount:.2f}</td>
+                        <tr style="background-color: #f8fafc;">
+                            <td class="label" style="font-weight: 800; font-family: 'Outfit', sans-serif; color: #0f172a; text-align: left; text-transform: uppercase;">Net Total:</td>
+                            <td class="val" style="font-weight: 800; font-family: 'Outfit', sans-serif; color: #0f172a; text-align: right; font-size: 13px;">₹{invoice.total_amount:.2f}</td>
                         </tr>
                     </table>
                     
-                    <div class="signatory-block">
-                        <div style="color: #475569; font-weight: 600; font-size: 11px; margin-bottom: 50px;">{signatory_label}</div>
+                    <div class="signatory-block" style="display: flex; flex-direction: column; align-items: center; margin-top: 15px; min-width: 180px;">
+                        <div style="color: #475569; font-weight: 600; font-size: 11px; margin-bottom: 5px;">{signatory_label}</div>
+                        <!-- Signature/Stamp space -->
+                        <div style="height: 60px; display: flex; align-items: center; justify-content: center; margin-bottom: 5px;">
+                            {"<img src='data:image/png;base64," + invoice.prepared_by_signature_b64 + "' style='max-height: 55px; width: auto; object-fit: contain; mix-blend-mode: multiply;' alt='Signature Stamp'>" if getattr(invoice, 'prepared_by_signature_b64', None) else ""}
+                        </div>
                         <div style="border-top: 1px solid #cbd5e1; display: inline-block; padding-top: 4px; font-weight: 700; color: #1e293b; width: 150px; text-align: center;">Authorized Signatory</div>
                     </div>
                 </div>

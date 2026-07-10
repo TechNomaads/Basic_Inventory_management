@@ -536,6 +536,25 @@
                             </div>
 
                             <div class="form-group">
+                                <label>Authorized Signature / Stamp</label>
+                                <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+                                    <div id="checkout-signature-preview-container" style="width: 120px; height: 50px; border: 1px dashed var(--border-color); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; background-color: var(--bg-input); overflow: hidden;">
+                                        <span id="checkout-signature-placeholder" style="font-size: 9px; color: var(--text-secondary);">Using Default</span>
+                                        <img id="checkout-signature-preview" style="max-height: 45px; max-width: 110px; object-fit: contain; display: none;" alt="Signature Preview">
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                                        <input type="file" id="checkout-signature-file" accept="image/*" style="display: none;">
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('checkout-signature-file').click()" style="padding: 4px 8px; font-size: 11px;">
+                                            <i data-lucide="upload" style="width: 12px; height: 12px; margin-right: 4px;"></i> Override
+                                        </button>
+                                        <button type="button" class="btn btn-danger btn-sm" id="btn-clear-checkout-signature" style="padding: 4px 8px; font-size: 11px; display: none;">
+                                            <i data-lucide="trash-2" style="width: 12px; height: 12px; margin-right: 4px;"></i> Clear
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
                                 <label class="field-label">Payment Mode *</label>
                                 <div class="payment-mode-selector">
                                     <button type="button" class="btn btn-payment active" data-mode="cash">
@@ -752,6 +771,24 @@
                                 <div class="input-wrapper">
                                     <i data-lucide="map-pin" class="input-icon"></i>
                                     <textarea id="profile-address" rows="2" placeholder="Your Address" style="width: 100%; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 8px 8px 36px; background-color: var(--bg-input); color: var(--text-primary); font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Digital Signature / Stamp</label>
+                                <div style="display: flex; align-items: center; gap: 15px; margin-top: 5px;">
+                                    <div id="profile-signature-preview-container" style="width: 150px; height: 60px; border: 1px dashed var(--border-color); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; background-color: var(--bg-input); overflow: hidden;">
+                                        <span id="profile-signature-placeholder" style="font-size: 10px; color: var(--text-secondary);">No Signature</span>
+                                        <img id="profile-signature-preview" style="max-height: 55px; max-width: 140px; object-fit: contain; display: none;" alt="Signature Preview">
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                                        <input type="file" id="profile-signature-file" accept="image/*" style="display: none;">
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('profile-signature-file').click()" style="padding: 4px 8px; font-size: 11px;">
+                                            <i data-lucide="upload" style="width: 12px; height: 12px; margin-right: 4px;"></i> Upload Stamp
+                                        </button>
+                                        <button type="button" class="btn btn-danger btn-sm" id="btn-clear-profile-signature" style="padding: 4px 8px; font-size: 11px; display: none;">
+                                            <i data-lucide="trash-2" style="width: 12px; height: 12px; margin-right: 4px;"></i> Remove
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                             <button type="submit" class="btn btn-primary" style="align-self: flex-start;">

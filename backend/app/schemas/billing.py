@@ -53,6 +53,7 @@ class CheckoutRequest(BaseModel):
     customer_gst: str | None = Field(default=None, max_length=50)
     invoice_type: str = Field(default="billing")
     company_id: UUID | None = Field(default=None)
+    prepared_by_signature_b64: str | None = Field(default=None)
     items: list[CheckoutItem] = Field(..., min_items=1, description="Cart must contain at least one item")
 
 
@@ -94,6 +95,7 @@ class InvoiceResponse(BaseModel):
     company_name: str | None = None
     company_address: str | None = None
     company_logo: str | None = None
+    prepared_by_signature_b64: str | None = None
     subtotal: float
     tax_amount: float
     discount_amount: float

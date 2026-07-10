@@ -47,6 +47,8 @@ class UserResponse(BaseModel):
     role: str
     is_active: bool
     last_login: datetime | None = None
+    address: str | None = None
+    signature_stamp_b64: str | None = None
     created_at: datetime
     location_ids: list[UUID] = Field(default_factory=list)
 

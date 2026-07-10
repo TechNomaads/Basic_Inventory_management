@@ -30,10 +30,12 @@ async def get_profile(
     return {
         "id": user.id,
         "name": user.name,
+        "full_name": user.name,
         "email": user.email,
         "role": user.role.value,
         "address": user.address,
         "active_company_id": user.active_company_id,
+        "signature_stamp_b64": user.signature_stamp_b64,
         "active_company": {
             "id": active_company.id,
             "name": active_company.name,
@@ -54,11 +56,13 @@ async def update_profile(
     old_values = {
         "name": user.name,
         "address": user.address,
-        "active_company_id": str(user.active_company_id) if user.active_company_id else None
+        "active_company_id": str(user.active_company_id) if user.active_company_id else None,
+        "has_signature": user.signature_stamp_b64 is not None
     }
 
-    if "name" in body and body["name"] is not None:
-        user.name = body["name"].strip()
+    name_val = body.get("name") or body.get("full_name")
+    if name_val is not None:
+        user.name = name_val.strip()
     if "address" in body:
         user.address = body["address"].strip() if body["address"] else None
     if "active_company_id" in body:
@@ -72,6 +76,8 @@ async def update_profile(
             user.active_company_id = company_uuid
         else:
             user.active_company_id = None
+    if "signature_stamp_b64" in body:
+        user.signature_stamp_b64 = body["signature_stamp_b64"]
 
     await db.flush()
 
@@ -79,7 +85,8 @@ async def update_profile(
     new_values = {
         "name": user.name,
         "address": user.address,
-        "active_company_id": str(user.active_company_id) if user.active_company_id else None
+        "active_company_id": str(user.active_company_id) if user.active_company_id else None,
+        "has_signature": user.signature_stamp_b64 is not None
     }
     await write_audit_log(
         db=db,
