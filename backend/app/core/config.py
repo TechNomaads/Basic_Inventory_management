@@ -49,8 +49,8 @@ class Settings(BaseSettings):
     # ── JWT ──────────────────────────────────────────────────────
     JWT_SECRET_KEY: str = "change-me-to-a-strong-random-secret"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30  # 30 days
 
     # ── Business rules ───────────────────────────────────────────
     ADJUSTMENT_THRESHOLD: int = 10

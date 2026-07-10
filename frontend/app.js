@@ -1513,7 +1513,18 @@ function initSocketConnection() {
     });
 }
 
-// ── CLIENT UTILITIES & HELPER METHODS ──
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+function subscribeTokenRefresh(cb) {
+    refreshSubscribers.push(cb);
+}
+
+function onRefreshed(token) {
+    refreshSubscribers.forEach(cb => cb(token));
+    refreshSubscribers = [];
+}
+
 async function fetchWithAuth(url, options = {}) {
     options.headers = options.headers || {};
     options.headers['Authorization'] = `Bearer ${state.token}`;
@@ -1525,34 +1536,52 @@ async function fetchWithAuth(url, options = {}) {
 
     // If 401, token might be expired. Try to refresh
     if (response.status === 401 && state.refreshToken) {
-        console.warn('Access token expired, attempting rotation...');
-        try {
-            const refreshResponse = await fetch(`${API_URL}/api/v1/auth/refresh`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refresh_token: state.refreshToken })
-            });
+        if (!isRefreshing) {
+            isRefreshing = true;
+            console.warn('Access token expired, attempting rotation...');
+            try {
+                const refreshResponse = await fetch(`${API_URL}/api/v1/auth/refresh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh_token: state.refreshToken })
+                });
 
-            if (!refreshResponse.ok) {
-                throw new Error('Refresh token revoked');
+                if (!refreshResponse.ok) {
+                    throw new Error('Refresh token revoked');
+                }
+
+                const data = await refreshResponse.json();
+                
+                // Save new tokens
+                state.token = data.access_token;
+                state.refreshToken = data.refresh_token;
+                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('refresh_token', data.refresh_token);
+
+                isRefreshing = false;
+                onRefreshed(data.access_token);
+            } catch (refreshErr) {
+                isRefreshing = false;
+                console.error('Session expired. Logging out...', refreshErr);
+                handleLogout();
+                throw new Error('Session expired. Please log in again.');
             }
-
-            const data = await refreshResponse.json();
-            
-            // Save new tokens
-            state.token = data.access_token;
-            state.refreshToken = data.refresh_token;
-            localStorage.setItem('access_token', data.access_token);
-            localStorage.setItem('refresh_token', data.refresh_token);
-
-            // Retry original request
-            options.headers['Authorization'] = `Bearer ${state.token}`;
-            response = await fetch(url, options);
-        } catch (refreshErr) {
-            console.error('Session expired. Logging out...', refreshErr);
-            handleLogout();
-            throw new Error('Session expired. Please log in again.');
         }
+
+        return new Promise((resolve) => {
+            subscribeTokenRefresh((token) => {
+                options.headers['Authorization'] = `Bearer ${token}`;
+                resolve(fetch(url, options).then(res => {
+                    if (!res.ok) {
+                        return res.json().then(errData => {
+                            throw new Error(errData.detail || `Request failed with status ${res.status}`);
+                        });
+                    }
+                    if (res.status === 204) return null;
+                    return res.json();
+                }));
+            });
+        });
     }
 
     if (!response.ok) {

@@ -802,7 +802,7 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
         .summary-section {{
             display: flex;
             justify-content: space-between;
-            margin-top: auto;
+            margin-top: 25px;
             padding-top: 20px;
             border-top: 2px solid #e2e8f0;
             gap: 40px;
