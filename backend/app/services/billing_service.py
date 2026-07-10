@@ -539,6 +539,22 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
     except Exception:
         pass
 
+    # Load gem_logo.png in base64
+    gem_logo_base64 = ""
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        gem_logo_path = os.path.abspath(os.path.join(current_dir, "..", "..", "..", "frontend", "gem_logo.png"))
+        if os.path.exists(gem_logo_path):
+            with open(gem_logo_path, 'rb') as f:
+                gem_logo_base64 = base64.b64encode(f.read()).decode('utf-8')
+        else:
+            gem_fallback_path = "/Users/nikola/Downloads/inventory_management/Basic_Inventory_management/frontend/gem_logo.png"
+            if os.path.exists(gem_fallback_path):
+                with open(gem_fallback_path, 'rb') as f:
+                    gem_logo_base64 = base64.b64encode(f.read()).decode('utf-8')
+    except Exception:
+        pass
+
     # Extract customer info
     cust_name = "Anonymous/Walk-in"
     cust_address = "N/A"
@@ -885,17 +901,19 @@ def generate_thermal_receipt_html(invoice: InvoiceModel) -> str:
     <div class="invoice-page">
         <div class="header-banner">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 20px;">
-                <!-- Left: Logo -->
+                <!-- Left: GeM Logo -->
                 <div style="width: 120px; flex-shrink: 0; text-align: left;">
-                    {"<img src='data:image/png;base64," + comp_logo_base64 + "' style='max-height: 60px; width: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));' alt='Logo'>" if comp_logo_base64 else ""}
+                    {"<img src='data:image/png;base64," + gem_logo_base64 + "' style='max-height: 60px; width: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));' alt='GeM Logo'>" if gem_logo_base64 else ""}
                 </div>
                 <!-- Middle: Company Title & Details -->
                 <div style="flex: 1; text-align: center;">
                     <div style="color: #eab308; font-family: 'Outfit', sans-serif; font-size: 24px; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;">{comp_name}</div>
                     {subtitle_html}
                 </div>
-                <!-- Right spacer to balance center alignment -->
-                <div style="width: 120px; flex-shrink: 0;"></div>
+                <!-- Right: Company Logo -->
+                <div style="width: 120px; flex-shrink: 0; text-align: right;">
+                    {"<img src='data:image/png;base64," + comp_logo_base64 + "' style='max-height: 60px; width: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));' alt='Company Logo'>" if comp_logo_base64 else ""}
+                </div>
             </div>
         </div>
         
