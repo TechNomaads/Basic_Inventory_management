@@ -1464,26 +1464,26 @@ input:focus, select:focus, textarea:focus {
 }
 
 /* Customer Directory cards */
-#card-total-customers {
+#card-customers-count {
     border-left: 4px solid #06b6d4 !important;
 }
-#card-total-customers:hover {
+#card-customers-count:hover {
     background: linear-gradient(145deg, var(--bg-card), rgba(6, 182, 212, 0.05)) !important;
     border-color: #06b6d4 !important;
 }
 
-#card-outstanding-debt {
+#card-customers-overdue {
     border-left: 4px solid #ec4899 !important;
 }
-#card-outstanding-debt:hover {
+#card-customers-overdue:hover {
     background: linear-gradient(145deg, var(--bg-card), rgba(236, 72, 153, 0.05)) !important;
     border-color: #ec4899 !important;
 }
 
-#card-total-credit-limit {
+#card-customers-credit {
     border-left: 4px solid #10b981 !important;
 }
-#card-total-credit-limit:hover {
+#card-customers-credit:hover {
     background: linear-gradient(145deg, var(--bg-card), rgba(16, 185, 129, 0.05)) !important;
     border-color: #10b981 !important;
 }
